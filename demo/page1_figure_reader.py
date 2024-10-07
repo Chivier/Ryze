@@ -54,7 +54,7 @@ def main():
 
     openai_agent = VisionAgent(model="gpt-4o", temperature=0.30)
     llama11b_agent = VisionAgent(
-        model="openrouter/meta-llama/llama-3.2-11b-vision-instruct", temperature=0.30
+        model="openrouter/meta-llama/llama-3.2-11b-vision-instruct:free", temperature=0.30
     )
     llama90b_agent = VisionAgent(
         model="openrouter/meta-llama/llama-3.2-90b-vision-instruct", temperature=0.30
@@ -108,6 +108,7 @@ def main():
                         f'<div style="background-color: rgba(0, 100, 0, 0.75); color: #ffffff; padding: 10px; border-radius: 5px;">{result2}</div>',
                         unsafe_allow_html=True,
                     )
+                print(result2)
                 
             with st.spinner("Llama 90B Agent processing..."):
                 result3 = read_figure(
