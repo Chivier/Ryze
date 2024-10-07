@@ -57,7 +57,10 @@ def main():
         model="openrouter/meta-llama/llama-3.2-90b-vision-instruct"
     )
     pixtral_agent = VisionAgent(model="openrouter/mistralai/pixtral-12b")
-
+    openai_agent.temperature = 0.70
+    llama_agent.temperature = 0.70
+    pixtral_agent.temperature = 0.70
+    
     uploaded_file = st.file_uploader("Choose an image...", type=["jpg", "png"])
     input_abstract = st.text_input("Enter the abstract of the paper...")
     input_legend = st.text_input("Enter the legend of the figure...")
