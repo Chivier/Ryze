@@ -52,18 +52,14 @@ def read_figure(agent, image, abstract, legend, additional_info):
 def main():
     st.title("Figure Reader")
 
-    openai_agent = VisionAgent(model="gpt-4o")
+    openai_agent = VisionAgent(model="gpt-4o", temperature=0.30)
     llama11b_agent = VisionAgent(
-        model="openrouter/meta-llama/llama-3.2-11b-vision-instruct"
+        model="openrouter/meta-llama/llama-3.2-11b-vision-instruct", temperature=0.30
     )
     llama90b_agent = VisionAgent(
-        model="openrouter/meta-llama/llama-3.2-90b-vision-instruct"
+        model="openrouter/meta-llama/llama-3.2-90b-vision-instruct", temperature=0.30
     )
-    pixtral_agent = VisionAgent(model="openrouter/mistralai/pixtral-12b")
-    openai_agent.temperature = 0.30
-    llama11b_agent.temperature = 0.30
-    llama90b_agent.temperature = 0.30
-    pixtral_agent.temperature = 0.65
+    pixtral_agent = VisionAgent(model="openrouter/mistralai/pixtral-12b", temperature=0.65)
     
     uploaded_file = st.file_uploader("Choose an image...", type=["jpg", "png"])
     input_abstract = st.text_input("Enter the abstract of the paper...")
