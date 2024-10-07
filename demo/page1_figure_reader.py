@@ -31,21 +31,21 @@ def read_figure(agent, image, abstract, legend, additional_info):
     if abstract != "":
         agent.append_message(MessageType.TEXT, "Abstract(This is the abstract of the paper): " + abstract + "\n")
     if legend != "":
-        agent.append_message(MessageType.TEXT, "Legend(This is the legend of a group of the figures, the given figure's legend is contained in the long paragraph, just fetch the useful part): " + legend + "\n")
+        agent.append_message(MessageType.TEXT, "Legend(our figure's legend is contained in the following paragraph, just fetch the RELATED part): " + legend + "\n")
     if additional_info != "":
         agent.append_message(MessageType.TEXT, "Additional(This is hint for the description of the figure, sometimes it's just nothing): " + additional_info + "\n")
     agent.append_message(MessageType.IMAGE_BASE64, image)
     if agent.model == "openrouter/mistralai/pixtral-12b":
         agent.append_message(
             MessageType.TEXT,
-            "Only return the description of the figure, do not include any other information.",
+            "Only return the description of the GIVEN figure, do not include any other information.",
         )
     else:
         agent.append_message(
             MessageType.TEXT,
             "Read the figure",
         )
-    response = agent.chat()
+    response = agent.chat(max_tokens=2048)
     return response
 
 
