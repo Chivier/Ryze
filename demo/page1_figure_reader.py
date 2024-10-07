@@ -38,7 +38,7 @@ def read_figure(agent, image, abstract, legend, additional_info):
     if agent.model == "openrouter/mistralai/pixtral-12b":
         agent.append_message(
             MessageType.TEXT,
-            "Only return the description of the GIVEN figure, do not include any other information.",
+            "Try to Understand the figure first, then return the detailed description of the figure.",
         )
     else:
         agent.append_message(
