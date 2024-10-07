@@ -53,12 +53,16 @@ def main():
     st.title("Figure Reader")
 
     openai_agent = VisionAgent(model="gpt-4o")
-    llama_agent = VisionAgent(
+    llama11b_agent = VisionAgent(
+        model="openrouter/meta-llama/llama-3.2-11b-vision-instruct"
+    )
+    llama90b_agent = VisionAgent(
         model="openrouter/meta-llama/llama-3.2-90b-vision-instruct"
     )
     pixtral_agent = VisionAgent(model="openrouter/mistralai/pixtral-12b")
     openai_agent.temperature = 0.30
-    llama_agent.temperature = 0.30
+    llama11b_agent.temperature = 0.30
+    llama90b_agent.temperature = 0.30
     pixtral_agent.temperature = 0.65
     
     uploaded_file = st.file_uploader("Choose an image...", type=["jpg", "png"])
@@ -95,22 +99,36 @@ def main():
                         unsafe_allow_html=True,
                     )
 
-            with st.spinner("Llama Agent processing..."):
+            with st.spinner("Llama 11B Agent processing..."):
                 result2 = read_figure(
-                    llama_agent,
+                    llama11b_agent,
                     image_base64,
                     input_abstract,
                     input_legend,
                     input_additional_info,
                 )
-                with st.expander("Llama Agent Result", expanded=True):
+                with st.expander("Llama 11B Agent Result", expanded=True):
                     st.markdown(
                         f'<div style="background-color: rgba(0, 100, 0, 0.75); color: #ffffff; padding: 10px; border-radius: 5px;">{result2}</div>',
                         unsafe_allow_html=True,
                     )
+                
+            with st.spinner("Llama 90B Agent processing..."):
+                result3 = read_figure(
+                    llama90b_agent,
+                    image_base64,
+                    input_abstract,
+                    input_legend,
+                    input_additional_info,
+                )
+                with st.expander("Llama 90B Agent Result", expanded=True):
+                    st.markdown(
+                        f'<div style="background-color: rgba(0, 100, 0, 0.75); color: #ffffff; padding: 10px; border-radius: 5px;">{result3}</div>',
+                        unsafe_allow_html=True,
+                    )
 
             with st.spinner("RYZE Agent processing..."):
-                result3 = read_figure(
+                result4 = read_figure(
                     pixtral_agent,
                     image_base64,
                     input_abstract,
@@ -119,7 +137,7 @@ def main():
                 )
                 with st.expander("RYZE Agent Result", expanded=True):
                     st.markdown(
-                        f'<div style="background-color: rgba(0, 100, 0, 0.75); color: #ffffff; padding: 10px; border-radius: 5px;">{result3}</div>',
+                        f'<div style="background-color: rgba(0, 100, 0, 0.75); color: #ffffff; padding: 10px; border-radius: 5px;">{result4}</div>',
                         unsafe_allow_html=True,
                     )
 
