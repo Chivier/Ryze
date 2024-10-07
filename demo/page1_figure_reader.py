@@ -1,9 +1,25 @@
 import streamlit as st
 from nerif.agent import VisionAgent
 from nerif.agent import MessageType
+# from nerif.agent import EmbeddingModel
 from PIL import Image
 import base64
 import io
+import streamlit as st
+
+# Set Streamlit theme to light mode
+st.set_page_config(page_title="Figure Reader", page_icon="📊", layout="wide", initial_sidebar_state="expanded")
+# Set Streamlit theme to light mode
+# Force light mode
+st.markdown("""
+    <style>
+        .stApp {
+            background-color: white;
+            color: black;
+        }
+    </style>
+""", unsafe_allow_html=True)
+
 
 
 def read_figure(agent, image, abstract, legend, additional_info):
@@ -12,14 +28,20 @@ def read_figure(agent, image, abstract, legend, additional_info):
             MessageType.TEXT,
             "This figure comes from a biology paper. With the information given, describe the figure in detail.",
         )
-        agent.append_message(MessageType.TEXT, "Abstract: " + abstract + "\n")
-    agent.append_message(MessageType.TEXT, "Legend: " + legend + "\n")
-    agent.append_message(MessageType.TEXT, "Additional: " + additional_info + "\n")
+    agent.append_message(MessageType.TEXT, "Abstract(This is the abstract of the paper): " + abstract + "\n")
+    agent.append_message(MessageType.TEXT, "Legend(This is the legend of a group of the figures, the given figure's legend is contained in the long paragraph, just fetch the useful part): " + legend + "\n")
+    agent.append_message(MessageType.TEXT, "Additional(This is hint for the description of the figure, sometimes it's just nothing): " + additional_info + "\n")
     agent.append_message(MessageType.IMAGE_BASE64, image)
-    agent.append_message(
-        MessageType.TEXT,
-        "Only return the description of the figure, do not include any other information.",
-    )
+    if agent.model == "openrouter/mistralai/pixtral-12b":
+        agent.append_message(
+            MessageType.TEXT,
+            "Only return the description of the figure, do not include any other information.",
+        )
+    else:
+        agent.append_message(
+            MessageType.TEXT,
+            "Read the figure",
+        )
     response = agent.chat()
     return response
 
@@ -41,6 +63,8 @@ def main():
         it can tell me something about the significance of different genes'."
     )
     # input_prompt = st.text_input("Enter a prompt for the agent...")
+    
+    input_prompt = st.text_input("Enter a prompt for the agent. If you don't have any specific request, just leave it blank.")
 
     if st.button("Read Figure"):
         if uploaded_file is not None:
@@ -61,7 +85,7 @@ def main():
                 )
                 with st.expander("OpenAI Agent Result", expanded=True):
                     st.markdown(
-                        f'<div style="background-color: #e6ffe6; padding: 10px; border-radius: 5px;">{result1}</div>',
+                        f'<div style="background-color: rgba(0, 100, 0, 0.75); color: #ffffff; padding: 10px; border-radius: 5px;">{result1}</div>',
                         unsafe_allow_html=True,
                     )
 
@@ -75,7 +99,7 @@ def main():
                 )
                 with st.expander("Llama Agent Result", expanded=True):
                     st.markdown(
-                        f'<div style="background-color: #e6ffe6; padding: 10px; border-radius: 5px;">{result2}</div>',
+                        f'<div style="background-color: rgba(0, 100, 0, 0.75); color: #ffffff; padding: 10px; border-radius: 5px;">{result2}</div>',
                         unsafe_allow_html=True,
                     )
 
@@ -89,7 +113,7 @@ def main():
                 )
                 with st.expander("RYZE Agent Result", expanded=True):
                     st.markdown(
-                        f'<div style="background-color: #e6ffe6; padding: 10px; border-radius: 5px;">{result3}</div>',
+                        f'<div style="background-color: rgba(0, 100, 0, 0.75); color: #ffffff; padding: 10px; border-radius: 5px;">{result3}</div>',
                         unsafe_allow_html=True,
                     )
 
