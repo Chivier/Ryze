@@ -1,0 +1,41 @@
+# Core dependencies
+gradio>=4.0.0
+torch>=2.0.0
+transformers>=4.36.0
+datasets>=2.14.0
+accelerate>=0.24.0
+
+# LoRA and PEFT
+peft>=0.7.0
+safetensors>=0.4.0
+
+# PDF processing
+PyMuPDF>=1.23.0
+pytesseract>=0.3.10
+Pillow>=10.0.0
+
+# Machine learning & evaluation
+numpy>=1.24.0
+scikit-learn>=1.3.0
+scipy>=1.11.0
+pandas>=2.0.0
+tensorboard>=2.14.0
+
+# Utilities
+tqdm>=4.66.0
+python-dotenv>=1.0.0
+
+# Quantization support (optional but recommended)
+bitsandbytes>=0.41.1  # For 4-bit/8-bit quantization
+
+# Optional optimizations
+# Uncomment if you have CUDA 11.6+ and want faster attention
+# flash-attn>=2.3.0
+
+# Alternative LoRA backend (optional, faster training)
+# unsloth>=2024.1
+
+# Development
+pytest>=7.4.0
+black>=23.0.0
+flake8>=6.0.0
