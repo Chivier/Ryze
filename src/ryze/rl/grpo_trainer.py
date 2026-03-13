@@ -108,13 +108,14 @@ class RyzeGRPOTrainer:
         for param in self.ref_model.parameters():
             param.requires_grad = False
 
-        # Initialize value head
+        # Initialize value head (match model dtype)
         hidden_size = self.model.config.hidden_size
+        model_dtype = next(self.model.parameters()).dtype
         self.value_head = nn.Sequential(
             nn.Linear(hidden_size, hidden_size),
             nn.ReLU(),
             nn.Linear(hidden_size, 1)
-        ).to(self.device)
+        ).to(device=self.device, dtype=model_dtype)
 
         # Setup optimizer for both LoRA and value head
         optimizer_params = [
@@ -237,7 +238,7 @@ class RyzeGRPOTrainer:
             all_responses.append(prompt_responses)
             all_log_probs.append(torch.tensor(prompt_log_probs))
 
-        return all_responses, torch.stack(all_log_probs)
+        return all_responses, torch.stack(all_log_probs).to(self.device)
 
     def compute_advantages(self, rewards: torch.Tensor, values: torch.Tensor) -> torch.Tensor:
         """Compute advantages using GAE or simple advantage"""
@@ -324,30 +325,34 @@ class RyzeGRPOTrainer:
                 # Get current values
                 last_hidden_states = outputs.hidden_states[-1]
                 last_token_hidden = last_hidden_states[:, -1, :]
-                current_values = self.value_head(last_token_hidden).squeeze()
+                current_values = self.value_head(last_token_hidden).squeeze(-1)
 
-                # Calculate current log probs (simplified)
-                logits = outputs.logits
+                # Calculate current log probs (simplified) - compute in float32 for stability
+                logits = outputs.logits.float()
                 current_log_probs = F.log_softmax(logits, dim=-1).mean(dim=(1, 2))
 
                 # Compute KL divergence with reference model
                 with torch.no_grad():
                     ref_outputs = self.ref_model(**batch_inputs)
-                    ref_logits = ref_outputs.logits
+                    ref_logits = ref_outputs.logits.float()
                     ref_log_probs = F.log_softmax(ref_logits, dim=-1).mean(dim=(1, 2))
 
                 kl_div = (current_log_probs - ref_log_probs).mean()
 
+                # Cast to float32 for loss computation
+                batch_advantages_f = batch_advantages.float()
+                batch_old_log_probs_f = batch_old_log_probs.float()
+
                 # Policy loss with clipping
-                ratio = torch.exp(current_log_probs - batch_old_log_probs)
-                policy_loss_1 = -batch_advantages * ratio
-                policy_loss_2 = -batch_advantages * torch.clamp(
+                ratio = torch.exp(current_log_probs - batch_old_log_probs_f)
+                policy_loss_1 = -batch_advantages_f * ratio
+                policy_loss_2 = -batch_advantages_f * torch.clamp(
                     ratio, 1 - self.clip_range, 1 + self.clip_range
                 )
                 policy_loss = torch.max(policy_loss_1, policy_loss_2).mean()
 
-                # Value loss with clipping
-                value_loss = F.mse_loss(current_values, batch_rewards)
+                # Value loss
+                value_loss = F.mse_loss(current_values.float(), batch_rewards.float())
 
                 # Total loss
                 loss = policy_loss + 0.5 * value_loss + self.kl_coef * kl_div

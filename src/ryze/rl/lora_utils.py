@@ -101,15 +101,12 @@ class LoRAManager:
         """Save LoRA checkpoint"""
         logger.info(f"Saving LoRA checkpoint to: {output_dir}")
 
-        # Save LoRA weights
+        # Save LoRA weights (this also saves the adapter config)
         model.save_pretrained(output_dir)
 
         # Save tokenizer if provided
         if tokenizer:
             tokenizer.save_pretrained(output_dir)
-
-        # Save adapter config
-        model.peft_config.save_pretrained(output_dir)
 
         logger.info("LoRA checkpoint saved successfully")
 

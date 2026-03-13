@@ -143,14 +143,22 @@ class RyzeSFTLoRATrainer:
         )
 
         # Create Trainer
-        trainer = Trainer(
+        trainer_kwargs = dict(
             model=self.model,
             args=training_args,
             train_dataset=data_loaders['train'].dataset,
             eval_dataset=data_loaders.get('val', {}).dataset if val_data_path else None,
-            tokenizer=self.tokenizer,
             data_collator=data_collator,
         )
+        # transformers >=4.46 renamed 'tokenizer' to 'processing_class'
+        import inspect
+        _trainer_params = inspect.signature(Trainer.__init__).parameters
+        if 'processing_class' in _trainer_params:
+            trainer_kwargs['processing_class'] = self.tokenizer
+        else:
+            trainer_kwargs['tokenizer'] = self.tokenizer
+
+        trainer = Trainer(**trainer_kwargs)
 
         # Train
         logger.info("Starting SFT LoRA training...")
