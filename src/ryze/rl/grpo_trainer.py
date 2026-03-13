@@ -1,4 +1,5 @@
 """GRPO (Group Relative Policy Optimization) Trainer with LoRA"""
+
 from __future__ import annotations
 
 import json
@@ -29,38 +30,39 @@ class RyzeGRPOTrainer:
 
     def __init__(self, config: Optional[Dict[str, Any]] = None):
         self.config = config or {}
-        self.device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
-        self.output_dir = self.config.get('output_dir', './grpo_outputs')
+        self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+        self.output_dir = self.config.get("output_dir", "./grpo_outputs")
 
         # Model parameters
         self.base_model_path = None  # Will be set to SFT merged model
 
         # Training parameters
-        self.batch_size = self.config.get('batch_size', 4)
-        self.micro_batch_size = self.config.get('micro_batch_size', 1)
-        self.learning_rate = self.config.get('learning_rate', 5e-5)
-        self.num_epochs = self.config.get('num_epochs', 3)
-        self.max_length = self.config.get('max_length', 1024)
-        self.max_new_tokens = self.config.get('max_new_tokens', 256)
+        self.batch_size = self.config.get("batch_size", 4)
+        self.micro_batch_size = self.config.get("micro_batch_size", 1)
+        self.learning_rate = self.config.get("learning_rate", 5e-5)
+        self.num_epochs = self.config.get("num_epochs", 3)
+        self.max_length = self.config.get("max_length", 1024)
+        self.max_new_tokens = self.config.get("max_new_tokens", 256)
 
         # GRPO parameters
-        self.num_samples_per_prompt = self.config.get('num_samples_per_prompt', 4)
-        self.temperature = self.config.get('temperature', 0.8)
-        self.kl_coef = self.config.get('kl_coef', 0.1)
-        self.clip_range = self.config.get('clip_range', 0.2)
-        self.value_clip_range = self.config.get('value_clip_range', 0.2)
-        self.grpo_epochs = self.config.get('grpo_epochs', 4)
+        self.num_samples_per_prompt = self.config.get("num_samples_per_prompt", 4)
+        self.temperature = self.config.get("temperature", 0.8)
+        self.kl_coef = self.config.get("kl_coef", 0.1)
+        self.clip_range = self.config.get("clip_range", 0.2)
+        self.value_clip_range = self.config.get("value_clip_range", 0.2)
+        self.grpo_epochs = self.config.get("grpo_epochs", 4)
 
         # LoRA parameters for GRPO
-        self.lora_r = self.config.get('lora_r', 8)
-        self.lora_alpha = self.config.get('lora_alpha', 16)
-        self.lora_dropout = self.config.get('lora_dropout', 0.1)
-        self.target_modules = self.config.get('target_modules', None)
-        self.use_4bit = self.config.get('use_4bit', False)
-        self.use_8bit = self.config.get('use_8bit', False)
+        self.lora_r = self.config.get("lora_r", 8)
+        self.lora_alpha = self.config.get("lora_alpha", 16)
+        self.lora_dropout = self.config.get("lora_dropout", 0.1)
+        self.target_modules = self.config.get("target_modules", None)
+        self.use_4bit = self.config.get("use_4bit", False)
+        self.use_8bit = self.config.get("use_8bit", False)
 
         # Auto-merge option
-        self.auto_merge = self.config.get('auto_merge', True)
+        self.auto_merge = self.config.get("auto_merge", True)
+        self.num_gpus = self.config.get("num_gpus", 1)
 
         # Initialize models
         self.model = None
@@ -81,7 +83,7 @@ class RyzeGRPOTrainer:
             r=self.lora_r,
             lora_alpha=self.lora_alpha,
             target_modules=self.target_modules,
-            lora_dropout=self.lora_dropout
+            lora_dropout=self.lora_dropout,
         )
 
         # Prepare policy model with LoRA
@@ -89,7 +91,7 @@ class RyzeGRPOTrainer:
             model_name_or_path=sft_model_path,
             lora_config=lora_config,
             use_8bit=self.use_8bit,
-            use_4bit=self.use_4bit
+            use_4bit=self.use_4bit,
         )
 
         # Load reference model (frozen, no LoRA)
@@ -102,7 +104,7 @@ class RyzeGRPOTrainer:
         self.ref_model = AutoModelForCausalLM.from_pretrained(
             ref_path,
             torch_dtype=torch.float16 if torch.cuda.is_available() else torch.float32,
-            device_map="auto" if torch.cuda.is_available() else None
+            device_map="auto" if torch.cuda.is_available() else None,
         )
         self.ref_model.eval()
         for param in self.ref_model.parameters():
@@ -111,15 +113,13 @@ class RyzeGRPOTrainer:
         # Initialize value head in float32 for numerical stability
         hidden_size = self.model.config.hidden_size
         self.value_head = nn.Sequential(
-            nn.Linear(hidden_size, hidden_size),
-            nn.ReLU(),
-            nn.Linear(hidden_size, 1)
+            nn.Linear(hidden_size, hidden_size), nn.ReLU(), nn.Linear(hidden_size, 1)
         ).to(device=self.device, dtype=torch.float32)
 
         # Setup optimizer for both LoRA and value head
         optimizer_params = [
-            {'params': self.model.parameters(), 'lr': self.learning_rate},
-            {'params': self.value_head.parameters(), 'lr': self.learning_rate * 2}
+            {"params": self.model.parameters(), "lr": self.learning_rate},
+            {"params": self.value_head.parameters(), "lr": self.learning_rate * 2},
         ]
         self.optimizer = torch.optim.AdamW(optimizer_params)
 
@@ -154,7 +154,7 @@ class RyzeGRPOTrainer:
 
             # Repetition penalty
             if len(words) > 3:
-                bigrams = [f"{words[i]} {words[i+1]}" for i in range(len(words)-1)]
+                bigrams = [f"{words[i]} {words[i + 1]}" for i in range(len(words) - 1)]
                 repeated_bigrams = len(bigrams) - len(set(bigrams))
                 if repeated_bigrams > 2:
                     reward -= 0.2 * repeated_bigrams
@@ -202,10 +202,7 @@ class RyzeGRPOTrainer:
             # Generate multiple samples
             for _ in range(self.num_samples_per_prompt):
                 inputs = self.tokenizer(
-                    prompt,
-                    return_tensors='pt',
-                    truncation=True,
-                    max_length=self.max_length
+                    prompt, return_tensors="pt", truncation=True, max_length=self.max_length
                 ).to(self.device)
 
                 with torch.no_grad():
@@ -216,20 +213,22 @@ class RyzeGRPOTrainer:
                         do_sample=True,
                         return_dict_in_generate=True,
                         output_scores=True,
-                        pad_token_id=self.tokenizer.pad_token_id
+                        pad_token_id=self.tokenizer.pad_token_id,
                     )
 
                     # Extract response
-                    prompt_length = inputs['input_ids'].shape[1]
+                    prompt_length = inputs["input_ids"].shape[1]
                     response_ids = outputs.sequences[0][prompt_length:]
                     response = self.tokenizer.decode(response_ids, skip_special_tokens=True)
                     prompt_responses.append(response)
 
                     # Calculate log probabilities
-                    if hasattr(outputs, 'scores'):
+                    if hasattr(outputs, "scores"):
                         scores = torch.stack(outputs.scores, dim=1)
                         log_probs = F.log_softmax(scores, dim=-1)
-                        selected_log_probs = log_probs[0, torch.arange(len(response_ids)), response_ids]
+                        selected_log_probs = log_probs[
+                            0, torch.arange(len(response_ids)), response_ids
+                        ]
                         prompt_log_probs.append(selected_log_probs.sum().item())
                     else:
                         prompt_log_probs.append(0.0)
@@ -260,9 +259,9 @@ class RyzeGRPOTrainer:
         shift_mask = attention_mask[:, 1:]  # [B, L-1]
 
         # Gather log prob for each actual next token
-        token_log_probs = shift_log_probs.gather(
-            2, shift_labels.unsqueeze(-1)
-        ).squeeze(-1)  # [B, L-1]
+        token_log_probs = shift_log_probs.gather(2, shift_labels.unsqueeze(-1)).squeeze(
+            -1
+        )  # [B, L-1]
 
         # Mean over non-padding positions per sample
         masked_sum = (token_log_probs * shift_mask).sum(dim=1)
@@ -278,7 +277,7 @@ class RyzeGRPOTrainer:
 
     def grpo_step(self, batch: Dict[str, Any]) -> Dict[str, float]:
         """Perform one GRPO optimization step"""
-        prompts = batch['prompt']
+        prompts = batch["prompt"]
 
         # Generate multiple samples per prompt
         logger.info(f"Generating {self.num_samples_per_prompt} samples per prompt...")
@@ -305,10 +304,10 @@ class RyzeGRPOTrainer:
         all_texts = [f"{p} {r}" for p, r in zip(all_prompts, all_responses)]
         inputs = self.tokenizer(
             all_texts,
-            return_tensors='pt',
+            return_tensors="pt",
             truncation=True,
             max_length=self.max_length,
-            padding=True
+            padding=True,
         ).to(self.device)
 
         with torch.no_grad():
@@ -320,13 +319,13 @@ class RyzeGRPOTrainer:
 
             # Compute old log probs via proper per-token log probs (padding-invariant)
             old_log_probs = self._per_token_log_probs(
-                outputs.logits, inputs['input_ids'], inputs['attention_mask']
+                outputs.logits, inputs["input_ids"], inputs["attention_mask"]
             )
 
             # Compute reference log probs once (shared across GRPO epochs)
             ref_outputs = self.ref_model(**inputs)
             ref_log_probs_all = self._per_token_log_probs(
-                ref_outputs.logits, inputs['input_ids'], inputs['attention_mask']
+                ref_outputs.logits, inputs["input_ids"], inputs["attention_mask"]
             )
 
         # Compute advantages
@@ -344,7 +343,7 @@ class RyzeGRPOTrainer:
             indices = torch.randperm(len(all_responses))
 
             for i in range(0, len(indices), self.micro_batch_size):
-                batch_indices = indices[i:i+self.micro_batch_size]
+                batch_indices = indices[i : i + self.micro_batch_size]
 
                 # Get batch data
                 batch_texts = [all_texts[idx] for idx in batch_indices]
@@ -356,10 +355,10 @@ class RyzeGRPOTrainer:
                 # Forward pass
                 batch_inputs = self.tokenizer(
                     batch_texts,
-                    return_tensors='pt',
+                    return_tensors="pt",
                     truncation=True,
                     max_length=self.max_length,
-                    padding=True
+                    padding=True,
                 ).to(self.device)
 
                 outputs = self.model(**batch_inputs, output_hidden_states=True)
@@ -371,15 +370,16 @@ class RyzeGRPOTrainer:
 
                 # Compute per-token log probs (padding-invariant)
                 current_log_probs = self._per_token_log_probs(
-                    outputs.logits, batch_inputs['input_ids'], batch_inputs['attention_mask']
+                    outputs.logits, batch_inputs["input_ids"], batch_inputs["attention_mask"]
                 )
 
                 # KL divergence with reference model
                 with torch.no_grad():
                     ref_outputs = self.ref_model(**batch_inputs)
                     micro_ref_log_probs = self._per_token_log_probs(
-                        ref_outputs.logits, batch_inputs['input_ids'],
-                        batch_inputs['attention_mask']
+                        ref_outputs.logits,
+                        batch_inputs["input_ids"],
+                        batch_inputs["attention_mask"],
                     )
                 kl_div = (current_log_probs - micro_ref_log_probs).mean()
 
@@ -413,8 +413,7 @@ class RyzeGRPOTrainer:
                 self.optimizer.zero_grad()
                 loss.backward()
                 torch.nn.utils.clip_grad_norm_(
-                    list(self.model.parameters()) + list(self.value_head.parameters()),
-                    1.0
+                    list(self.model.parameters()) + list(self.value_head.parameters()), 1.0
                 )
                 self.optimizer.step()
 
@@ -428,12 +427,12 @@ class RyzeGRPOTrainer:
             num_updates = 1
 
         return {
-            'loss': total_loss / num_updates,
-            'policy_loss': total_policy_loss / num_updates,
-            'value_loss': total_value_loss / num_updates,
-            'kl_divergence': total_kl / num_updates,
-            'mean_reward': rewards.mean().item(),
-            'mean_normalized_reward': normalized_rewards.mean().item()
+            "loss": total_loss / num_updates,
+            "policy_loss": total_policy_loss / num_updates,
+            "value_loss": total_value_loss / num_updates,
+            "kl_divergence": total_kl / num_updates,
+            "mean_reward": rewards.mean().item(),
+            "mean_normalized_reward": normalized_rewards.mean().item(),
         }
 
     def train(self, sft_model_path: str, grpo_data_path: str) -> Dict[str, Any]:
@@ -448,8 +447,8 @@ class RyzeGRPOTrainer:
         os.makedirs(run_output_dir, exist_ok=True)
 
         # Save config
-        config_path = os.path.join(run_output_dir, 'grpo_config.json')
-        with open(config_path, 'w') as f:
+        config_path = os.path.join(run_output_dir, "grpo_config.json")
+        with open(config_path, "w") as f:
             json.dump(self.config, f, indent=2)
 
         # Load dataset
@@ -457,7 +456,7 @@ class RyzeGRPOTrainer:
             data_path=grpo_data_path,
             tokenizer=self.tokenizer,
             batch_size=self.batch_size,
-            max_length=self.max_length
+            max_length=self.max_length,
         )
 
         # Training loop
@@ -467,12 +466,14 @@ class RyzeGRPOTrainer:
         for epoch in range(self.num_epochs):
             epoch_stats = defaultdict(list)
 
-            progress_bar = tqdm(data_loader, desc=f"Epoch {epoch+1}/{self.num_epochs}")
+            progress_bar = tqdm(data_loader, desc=f"Epoch {epoch + 1}/{self.num_epochs}")
 
             for batch_idx, batch in enumerate(progress_bar):
                 # Move batch to device
-                batch = {k: v.to(self.device) if isinstance(v, torch.Tensor) else v
-                        for k, v in batch.items()}
+                batch = {
+                    k: v.to(self.device) if isinstance(v, torch.Tensor) else v
+                    for k, v in batch.items()
+                }
 
                 # GRPO step
                 step_stats = self.grpo_step(batch)
@@ -482,10 +483,12 @@ class RyzeGRPOTrainer:
                     epoch_stats[key].append(value)
 
                 # Update progress bar
-                progress_bar.set_postfix({
-                    'loss': f"{step_stats['loss']:.4f}",
-                    'reward': f"{step_stats['mean_reward']:.4f}"
-                })
+                progress_bar.set_postfix(
+                    {
+                        "loss": f"{step_stats['loss']:.4f}",
+                        "reward": f"{step_stats['mean_reward']:.4f}",
+                    }
+                )
 
                 # Save checkpoint
                 if (batch_idx + 1) % 100 == 0:
@@ -494,11 +497,13 @@ class RyzeGRPOTrainer:
 
             # Calculate epoch averages
             epoch_summary = {key: np.mean(values) for key, values in epoch_stats.items()}
-            epoch_summary['epoch'] = epoch
+            epoch_summary["epoch"] = epoch
             training_stats.append(epoch_summary)
 
-            logger.info(f"Epoch {epoch+1} - Loss: {epoch_summary['loss']:.4f}, "
-                       f"Reward: {epoch_summary['mean_reward']:.4f}")
+            logger.info(
+                f"Epoch {epoch + 1} - Loss: {epoch_summary['loss']:.4f}, "
+                f"Reward: {epoch_summary['mean_reward']:.4f}"
+            )
 
         # Save final LoRA adapter
         final_lora_path = os.path.join(run_output_dir, "final_lora_adapter")
@@ -512,33 +517,270 @@ class RyzeGRPOTrainer:
             LoRAManager.merge_lora_to_base(
                 base_model_path=sft_model_path,
                 lora_adapter_path=final_lora_path,
-                output_path=merged_model_path
+                output_path=merged_model_path,
             )
 
         # Save value head separately
-        value_head_path = os.path.join(run_output_dir, 'value_head.pt')
+        value_head_path = os.path.join(run_output_dir, "value_head.pt")
         torch.save(self.value_head.state_dict(), value_head_path)
 
         # Save training results
         results = {
-            'sft_model_path': sft_model_path,
-            'grpo_data_path': grpo_data_path,
-            'run_name': run_name,
-            'run_output_dir': run_output_dir,
-            'final_lora_path': final_lora_path,
-            'merged_model_path': merged_model_path,
-            'value_head_path': value_head_path,
-            'training_stats': training_stats,
-            'timestamp': timestamp,
-            'config': self.config
+            "sft_model_path": sft_model_path,
+            "grpo_data_path": grpo_data_path,
+            "run_name": run_name,
+            "run_output_dir": run_output_dir,
+            "final_lora_path": final_lora_path,
+            "merged_model_path": merged_model_path,
+            "value_head_path": value_head_path,
+            "training_stats": training_stats,
+            "timestamp": timestamp,
+            "config": self.config,
         }
 
-        results_path = os.path.join(run_output_dir, 'training_results.json')
-        with open(results_path, 'w', encoding='utf-8') as f:
+        results_path = os.path.join(run_output_dir, "training_results.json")
+        with open(results_path, "w", encoding="utf-8") as f:
             json.dump(results, f, ensure_ascii=False, indent=2)
 
         logger.info(f"GRPO training completed. Results saved to: {run_output_dir}")
 
+        return results
+
+    def train_distributed(
+        self,
+        sft_model_path: str,
+        grpo_data_path: str,
+        gen_gpu_count: int = 2,
+        train_gpu_count: int = 2,
+    ) -> Dict[str, Any]:
+        """Train GRPO using distributed actor-learner pattern via Ray.
+
+        Generation (sampling + reward + advantage) runs on one GPU pool,
+        training (optimization) on another.  Weight sync after each step.
+
+        Args:
+            sft_model_path: Path to merged SFT model.
+            grpo_data_path: Path to RL dataset JSON.
+            gen_gpu_count: GPUs for generation actor.
+            train_gpu_count: GPUs for training actor.
+
+        Returns:
+            Training results dict (same schema as ``train()``).
+        """
+        import ray
+
+        from ..cluster.grpo_actors import GRPOGenerationActor, GRPOTrainingActor
+
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        run_name = f"grpo_distributed_{timestamp}"
+        run_output_dir = os.path.join(self.output_dir, run_name)
+        os.makedirs(run_output_dir, exist_ok=True)
+
+        # Save config
+        config_path = os.path.join(run_output_dir, "grpo_config.json")
+        with open(config_path, "w") as f:
+            json.dump(self.config, f, indent=2)
+
+        # Create Ray actors with GPU allocation
+        gen_cls = ray.remote(num_gpus=gen_gpu_count)(GRPOGenerationActor)
+        train_cls = ray.remote(num_gpus=train_gpu_count)(GRPOTrainingActor)
+
+        gen_actor = gen_cls.remote(self.config)
+        train_actor = train_cls.remote(self.config)
+
+        # Log Ray cluster GPU resources
+        cluster_resources = ray.cluster_resources()
+        available_resources = ray.available_resources()
+        logger.info(
+            "[GPU-TRACK] Ray cluster resources — total: %s",
+            {k: v for k, v in cluster_resources.items() if "GPU" in k or "CPU" in k},
+        )
+        logger.info(
+            "[GPU-TRACK] Ray available resources — %s",
+            {k: v for k, v in available_resources.items() if "GPU" in k or "CPU" in k},
+        )
+        logger.info(
+            "[GPU-TRACK] Creating actors — gen_actor: %d GPUs, train_actor: %d GPUs",
+            gen_gpu_count,
+            train_gpu_count,
+        )
+
+        # Load models on both actors in parallel
+        logger.info(
+            "Loading models on gen_actor (%d GPUs) and train_actor (%d GPUs)...",
+            gen_gpu_count,
+            train_gpu_count,
+        )
+        ray.get(
+            [
+                gen_actor.load_models.remote(sft_model_path),
+                train_actor.load_models.remote(sft_model_path),
+            ]
+        )
+
+        # Query actual GPU assignments from each actor
+        gen_gpu_info, train_gpu_info = ray.get(
+            [gen_actor.get_gpu_info.remote(), train_actor.get_gpu_info.remote()]
+        )
+        logger.info(
+            "[GPU-TRACK] GRPOGenerationActor (pid=%s) — "
+            "CUDA_VISIBLE_DEVICES=%s, gpu_count=%d, gpus=%s",
+            gen_gpu_info["pid"],
+            gen_gpu_info["cuda_visible_devices"],
+            gen_gpu_info["gpu_count"],
+            gen_gpu_info["gpu_names"],
+        )
+        logger.info(
+            "[GPU-TRACK] GRPOTrainingActor  (pid=%s) — "
+            "CUDA_VISIBLE_DEVICES=%s, gpu_count=%d, gpus=%s",
+            train_gpu_info["pid"],
+            train_gpu_info["cuda_visible_devices"],
+            train_gpu_info["gpu_count"],
+            train_gpu_info["gpu_names"],
+        )
+        # Verify actors are on different GPU sets
+        gen_gpus_set = set(gen_gpu_info["cuda_visible_devices"].split(","))
+        train_gpus_set = set(train_gpu_info["cuda_visible_devices"].split(","))
+        if gen_gpus_set & train_gpus_set:
+            logger.warning(
+                "[GPU-TRACK] WARNING: gen and train actors share GPUs! "
+                "gen=%s, train=%s",
+                gen_gpu_info["cuda_visible_devices"],
+                train_gpu_info["cuda_visible_devices"],
+            )
+        else:
+            logger.info(
+                "[GPU-TRACK] CONFIRMED: gen and train actors on separate GPUs "
+                "(gen=%s, train=%s)",
+                gen_gpu_info["cuda_visible_devices"],
+                train_gpu_info["cuda_visible_devices"],
+            )
+
+        # Load tokenizer locally for DataLoader creation
+        from transformers import AutoTokenizer
+
+        tokenizer = AutoTokenizer.from_pretrained(sft_model_path)
+        if tokenizer.pad_token is None:
+            tokenizer.pad_token = tokenizer.eos_token
+
+        data_loader = DatasetLoader.load_rl_dataset(
+            data_path=grpo_data_path,
+            tokenizer=tokenizer,
+            batch_size=self.batch_size,
+            max_length=self.max_length,
+        )
+
+        # Training loop
+        logger.info("Starting distributed GRPO training...")
+        training_stats = []
+        total_batch_steps = 0
+
+        for epoch in range(self.num_epochs):
+            epoch_stats = defaultdict(list)
+
+            for batch_idx, batch in enumerate(data_loader):
+                prompts = batch["prompt"]
+
+                # Generation phase (on gen actor)
+                logger.info(
+                    "[GPU-TRACK] Epoch %d batch %d — "
+                    "dispatching generation to gen_actor (%d GPUs)",
+                    epoch + 1, batch_idx + 1, gen_gpu_count,
+                )
+                gen_data = ray.get(gen_actor.generate_and_prepare.remote(prompts))
+                logger.info(
+                    "[GPU-TRACK] Epoch %d batch %d — "
+                    "generation complete, %d samples produced",
+                    epoch + 1, batch_idx + 1, len(gen_data["all_texts"]),
+                )
+
+                # Training phase (on train actor)
+                logger.info(
+                    "[GPU-TRACK] Epoch %d batch %d — "
+                    "dispatching training to train_actor (%d GPUs)",
+                    epoch + 1, batch_idx + 1, train_gpu_count,
+                )
+                step_stats = ray.get(train_actor.grpo_train_step.remote(gen_data))
+
+                # Weight sync: train → gen
+                lora_sd, vh_sd = ray.get(train_actor.get_lora_weights.remote())
+                ray.get(gen_actor.update_weights.remote(lora_sd, vh_sd))
+                logger.info(
+                    "[GPU-TRACK] Epoch %d batch %d — "
+                    "weight sync complete (train_actor → gen_actor)",
+                    epoch + 1, batch_idx + 1,
+                )
+
+                total_batch_steps += 1
+                for key, value in step_stats.items():
+                    epoch_stats[key].append(value)
+
+                logger.info(
+                    "Epoch %d batch %d — loss=%.4f reward=%.4f",
+                    epoch + 1,
+                    batch_idx + 1,
+                    step_stats["loss"],
+                    step_stats["mean_reward"],
+                )
+
+            epoch_summary = {key: np.mean(values) for key, values in epoch_stats.items()}
+            epoch_summary["epoch"] = epoch
+            training_stats.append(epoch_summary)
+
+            logger.info(
+                "Epoch %d — loss=%.4f reward=%.4f",
+                epoch + 1,
+                epoch_summary.get("loss", 0),
+                epoch_summary.get("mean_reward", 0),
+            )
+
+        # Save final checkpoint from training actor
+        final_lora_path = os.path.join(run_output_dir, "final_lora_adapter")
+        ray.get(train_actor.save_checkpoint.remote(final_lora_path))
+
+        # Optionally merge
+        merged_model_path = None
+        if self.auto_merge:
+            from .lora_utils import LoRAManager
+
+            logger.info("Merging distributed GRPO LoRA weights...")
+            merged_model_path = os.path.join(run_output_dir, "merged_model")
+            LoRAManager.merge_lora_to_base(
+                base_model_path=sft_model_path,
+                lora_adapter_path=final_lora_path,
+                output_path=merged_model_path,
+            )
+
+        # Cleanup actors
+        ray.kill(gen_actor)
+        ray.kill(train_actor)
+
+        results = {
+            "sft_model_path": sft_model_path,
+            "grpo_data_path": grpo_data_path,
+            "run_name": run_name,
+            "run_output_dir": run_output_dir,
+            "final_lora_path": final_lora_path,
+            "merged_model_path": merged_model_path,
+            "training_stats": training_stats,
+            "total_batch_steps": total_batch_steps,
+            "timestamp": timestamp,
+            "config": self.config,
+            "gpu_info": {
+                "gen_actor": gen_gpu_info,
+                "train_actor": train_gpu_info,
+            },
+        }
+
+        results_path = os.path.join(run_output_dir, "training_results.json")
+        with open(results_path, "w", encoding="utf-8") as f:
+            json.dump(results, f, ensure_ascii=False, indent=2, default=str)
+
+        logger.info(
+            "Distributed GRPO training completed (%d batch steps). Results saved to: %s",
+            total_batch_steps,
+            run_output_dir,
+        )
         return results
 
     def save_checkpoint(self, checkpoint_dir: str):
@@ -549,11 +791,11 @@ class RyzeGRPOTrainer:
         LoRAManager.save_lora_checkpoint(self.model, checkpoint_dir, self.tokenizer)
 
         # Save value head
-        value_head_path = os.path.join(checkpoint_dir, 'value_head.pt')
+        value_head_path = os.path.join(checkpoint_dir, "value_head.pt")
         torch.save(self.value_head.state_dict(), value_head_path)
 
         # Save optimizer state
-        optimizer_path = os.path.join(checkpoint_dir, 'optimizer.pt')
+        optimizer_path = os.path.join(checkpoint_dir, "optimizer.pt")
         torch.save(self.optimizer.state_dict(), optimizer_path)
 
         logger.info(f"Checkpoint saved to: {checkpoint_dir}")
@@ -572,7 +814,16 @@ class RyzeGRPOTrainer:
                 )
 
             def resource_requirements(self) -> ResourceRequirement:
-                return ResourceRequirement(gpu_count=1, memory_gb=24.0, estimated_duration_s=7200)
+                if trainer.config.get("distributed_grpo", False):
+                    # Coordinator is CPU-only; actors claim GPUs via Ray
+                    return ResourceRequirement(
+                        gpu_count=0, memory_gb=4.0, estimated_duration_s=7200
+                    )
+                return ResourceRequirement(
+                    gpu_count=trainer.num_gpus,
+                    memory_gb=24.0,
+                    estimated_duration_s=7200,
+                )
 
             def validate_inputs(self) -> bool:
                 return True
@@ -582,7 +833,17 @@ class RyzeGRPOTrainer:
                 data_path = inputs.get("grpo_data_path", "")
                 if not sft_model_path:
                     return TaskResult(status=TaskStatus.FAILED, error="No sft_model_path provided")
-                results = trainer.train(sft_model_path, data_path)
+
+                if trainer.config.get("distributed_grpo", False):
+                    results = trainer.train_distributed(
+                        sft_model_path,
+                        data_path,
+                        gen_gpu_count=trainer.config.get("gen_gpu_count", 2),
+                        train_gpu_count=trainer.config.get("train_gpu_count", 2),
+                    )
+                else:
+                    results = trainer.train(sft_model_path, data_path)
+
                 final_stats = results.get("training_stats", [{}])[-1]
                 return TaskResult(
                     status=TaskStatus.COMPLETED,
@@ -599,9 +860,15 @@ class RyzeGRPOTrainer:
 
             def to_config(self) -> dict:
                 """Return trainer class path and config for remote reconstruction."""
+                cfg = dict(trainer.config)
+                # Propagate distributed settings for remote reconstruction
+                if trainer.config.get("distributed_grpo", False):
+                    cfg.setdefault("distributed_grpo", True)
+                    cfg.setdefault("gen_gpu_count", 2)
+                    cfg.setdefault("train_gpu_count", 2)
                 return {
                     "trainer_class_path": "ryze.rl.grpo_trainer.RyzeGRPOTrainer",
-                    "trainer_config": dict(trainer.config),
+                    "trainer_config": cfg,
                 }
 
         return GRPOTrainTask()

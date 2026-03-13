@@ -34,8 +34,10 @@ class RyzeSFTLoRATrainer:
         self.num_epochs = self.config.get('num_epochs', 3)
         self.max_length = self.config.get('max_length', 2048)
         self.gradient_accumulation_steps = self.config.get('gradient_accumulation_steps', 4)
+        self.max_steps = self.config.get('max_steps', -1)
         self.warmup_ratio = self.config.get('warmup_ratio', 0.03)
         self.weight_decay = self.config.get('weight_decay', 0.001)
+        self.num_gpus = self.config.get('num_gpus', 1)
 
         # LoRA parameters
         self.lora_r = self.config.get('lora_r', 16)
@@ -67,11 +69,15 @@ class RyzeSFTLoRATrainer:
         )
 
         # Prepare model with LoRA
+        # When using multiple GPUs with HF Trainer DataParallel,
+        # device_map must be None so Trainer can wrap the model.
+        dm = None if self.num_gpus > 1 else "auto"
         self.model, self.tokenizer = LoRAManager.prepare_model_for_lora(
             model_name_or_path=model_name_or_path,
             lora_config=self.lora_config,
             use_8bit=self.use_8bit,
-            use_4bit=self.use_4bit
+            use_4bit=self.use_4bit,
+            device_map=dm,
         )
 
         logger.info(f"Model prepared with LoRA on {self.device}")
@@ -139,6 +145,7 @@ class RyzeSFTLoRATrainer:
             push_to_hub=False,
             optim="paged_adamw_8bit" if self.use_4bit or self.use_8bit else "adamw_torch",
             remove_unused_columns=False,
+            max_steps=self.max_steps,
             run_name=run_name,
         )
 
@@ -161,6 +168,23 @@ class RyzeSFTLoRATrainer:
         trainer = Trainer(**trainer_kwargs)
 
         # Train
+        import os as _os
+
+        _cuda_visible = _os.environ.get("CUDA_VISIBLE_DEVICES", "not set")
+        _n_gpu = training_args.n_gpu
+        logger.info(
+            "[GPU-TRACK] SFT Trainer — CUDA_VISIBLE_DEVICES=%s, "
+            "n_gpu=%d, device=%s, per_device_batch=%d",
+            _cuda_visible,
+            _n_gpu,
+            training_args.device,
+            self.batch_size,
+        )
+        logger.info(
+            "[GPU-TRACK] SFT Trainer — max_steps=%d, num_epochs=%d",
+            self.max_steps,
+            self.num_epochs,
+        )
         logger.info("Starting SFT LoRA training...")
         if resume_from_checkpoint:
             train_result = trainer.train(resume_from_checkpoint=resume_from_checkpoint)
@@ -182,6 +206,21 @@ class RyzeSFTLoRATrainer:
                 output_path=merged_model_path
             )
 
+        # Capture GPU info for tracking
+        _gpu_info = {
+            "cuda_visible_devices": _os.environ.get("CUDA_VISIBLE_DEVICES", "not set"),
+            "n_gpu": int(_n_gpu),
+            "device": str(training_args.device),
+            "pid": _os.getpid(),
+        }
+        logger.info(
+            "[GPU-TRACK] SFT completed — %d steps on %d GPUs (pid=%d, CUDA_VISIBLE_DEVICES=%s)",
+            train_result.global_step,
+            _gpu_info["n_gpu"],
+            _gpu_info["pid"],
+            _gpu_info["cuda_visible_devices"],
+        )
+
         # Save training results
         results = {
             'base_model_name': self.base_model_name,
@@ -193,6 +232,7 @@ class RyzeSFTLoRATrainer:
             'merged_model_path': merged_model_path,
             'training_loss': train_result.training_loss,
             'training_steps': train_result.global_step,
+            'gpu_info': _gpu_info,
             'timestamp': timestamp,
             'lora_config': {
                 'r': self.lora_r,
@@ -314,7 +354,7 @@ class RyzeSFTLoRATrainer:
                 )
 
             def resource_requirements(self) -> ResourceRequirement:
-                return ResourceRequirement(gpu_count=1, memory_gb=16.0, estimated_duration_s=3600)
+                return ResourceRequirement(gpu_count=trainer.num_gpus, memory_gb=16.0, estimated_duration_s=3600)
 
             def validate_inputs(self) -> bool:
                 return True

@@ -47,9 +47,16 @@ class LoRAManager:
         model_name_or_path: str,
         lora_config: LoraConfig,
         use_8bit: bool = False,
-        use_4bit: bool = False
+        use_4bit: bool = False,
+        device_map: str | None = "auto",
     ) -> tuple:
-        """Prepare model for LoRA training"""
+        """Prepare model for LoRA training.
+
+        Args:
+            device_map: HuggingFace device_map strategy. Use ``"auto"``
+                for single-GPU or actor-based setups. Set to ``None``
+                when HF Trainer will manage DataParallel across GPUs.
+        """
         logger.info(f"Loading base model: {model_name_or_path}")
 
         # Load tokenizer
@@ -74,12 +81,15 @@ class LoRAManager:
                 bnb_8bit_compute_dtype=torch.float16,
             )
 
+        # Resolve device_map: use "auto" by default on CUDA, None otherwise
+        effective_device_map = device_map if torch.cuda.is_available() else None
+
         # Load model
         model = AutoModelForCausalLM.from_pretrained(
             model_name_or_path,
             quantization_config=quantization_config,
             torch_dtype=torch.float16 if torch.cuda.is_available() else torch.float32,
-            device_map="auto" if torch.cuda.is_available() else None,
+            device_map=effective_device_map,
         )
 
         # Prepare for k-bit training if using quantization
