@@ -597,4 +597,11 @@ class RyzeGRPOTrainer:
                     ],
                 )
 
+            def to_config(self) -> dict:
+                """Return trainer class path and config for remote reconstruction."""
+                return {
+                    "trainer_class_path": "ryze.rl.grpo_trainer.RyzeGRPOTrainer",
+                    "trainer_config": dict(trainer.config),
+                }
+
         return GRPOTrainTask()

@@ -335,4 +335,11 @@ class RyzeSFTLoRATrainer:
                     ],
                 )
 
+            def to_config(self) -> dict:
+                """Return trainer class path and config for remote reconstruction."""
+                return {
+                    "trainer_class_path": "ryze.rl.sft_lora_trainer.RyzeSFTLoRATrainer",
+                    "trainer_config": dict(trainer.config),
+                }
+
         return SFTTrainTask()

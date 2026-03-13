@@ -341,4 +341,11 @@ class RyzeEvaluator:
                 results = evaluator.evaluate_model(mp, bn)
                 return TaskResult(status=TaskStatus.COMPLETED, output=results)
 
+            def to_config(self) -> dict:
+                """Return evaluator class path and config for remote reconstruction."""
+                return {
+                    "trainer_class_path": "ryze.eval.evaluator.RyzeEvaluator",
+                    "trainer_config": dict(evaluator.config),
+                }
+
         return EvaluationTask(model_path, benchmark_name)
