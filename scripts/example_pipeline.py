@@ -9,11 +9,11 @@ import json
 from pathlib import Path
 
 # Add src to path
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', 'src'))
+sys.path.insert(0, str(Path(__file__).parent.parent / "src"))
 
-from data import RyzeDataProcessor
-from rl import RyzeSFTTrainer, RyzeRLTrainer
-from eval import RyzeEvaluator
+from ryze.data import RyzeDataProcessor
+from ryze.rl import RyzeSFTTrainer, RyzeRLTrainer
+from ryze.eval import RyzeEvaluator
 
 
 def run_complete_pipeline():
