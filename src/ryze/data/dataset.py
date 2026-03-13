@@ -205,10 +205,40 @@ class SFTDatasetGenerator:
                     md_dir = str(Path(md_dir).parent)
                 out = inputs.get("output_path") or os.path.join(md_dir, "dataset.json")
                 metadata = generator.create_dataset(md_dir, out)
+
+                # Generate RL data for GRPO stage (same logic as legacy smoke test)
+                train_path = metadata.get("train_path", "")
+                grpo_data_path = ""
+                if train_path and os.path.exists(train_path):
+                    with open(train_path, "r", encoding="utf-8") as f:
+                        train_data = json.load(f)
+                    rl_data = [
+                        {
+                            "instruction": item.get("instruction", ""),
+                            "input": item.get("input", ""),
+                            "output": item.get("output", ""),
+                            "prompt": (
+                                f"{item.get('instruction', '')}\n\n"
+                                f"Input: {item.get('input', '')}\n\nResponse:"
+                            ),
+                        }
+                        for item in train_data
+                    ]
+                    grpo_data_path = out.replace(".json", "_rl_data.json")
+                    with open(grpo_data_path, "w", encoding="utf-8") as f:
+                        json.dump(rl_data, f, ensure_ascii=False, indent=2)
+
+                output = dict(metadata)
+                if grpo_data_path:
+                    output["grpo_data_path"] = grpo_data_path
+
                 return TaskResult(
                     status=TaskStatus.COMPLETED,
-                    output=metadata,
-                    artifacts=[metadata.get("train_path", ""), metadata.get("val_path", "")],
+                    output=output,
+                    artifacts=[
+                        metadata.get("train_path", ""),
+                        metadata.get("val_path", ""),
+                    ] + ([grpo_data_path] if grpo_data_path else []),
                 )
 
         return DatasetGenTask(markdown_dir, output_path)
