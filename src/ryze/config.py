@@ -108,8 +108,9 @@ class UIConfig(BaseModel):
 
 
 class ClusterConfig(BaseModel):
-    mode: str = "local"  # "local" or "distributed"
-    pylet_head_url: str = "http://localhost:8000"
+    mode: str = "local"  # "local" or "ray"
+    ray_address: str = "auto"
+    ray_dashboard_url: str = "http://localhost:8265"
     timeout_s: int = 300
     max_retries: int = 3
 
@@ -133,14 +134,24 @@ class RyzeConfig(BaseModel):
 
     @classmethod
     def from_legacy_json(cls, path: str | Path) -> RyzeConfig:
-        """Load from legacy JSON config, adding missing cluster section."""
+        """Load from legacy JSON config, migrating old fields."""
         path = Path(path)
         if not path.exists():
             raise ConfigError(f"Configuration file not found: {path}")
         with open(path, "r", encoding="utf-8") as f:
             data = json.load(f)
+        # Migrate cluster config
         if "cluster" not in data:
             data["cluster"] = ClusterConfig().model_dump()
+        else:
+            cluster = data["cluster"]
+            # Migrate pylet_head_url -> ray_address
+            if "pylet_head_url" in cluster:
+                del cluster["pylet_head_url"]
+            if "ray_address" not in cluster:
+                cluster["ray_address"] = "auto"
+            if "ray_dashboard_url" not in cluster:
+                cluster["ray_dashboard_url"] = "http://localhost:8265"
         return cls.model_validate(data)
 
     def to_legacy_dict(self) -> dict[str, Any]:

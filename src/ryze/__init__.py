@@ -7,7 +7,7 @@ Ryze Pipeline Components:
    - v2: LoRA-based SFT + GRPO with stage-wise merging
 3. Eval Module: Model evaluation framework
 4. Core Module: Task abstraction and pipeline orchestration
-5. Cluster Module: SwarmPilot/PyLet distributed execution
+5. Cluster Module: Ray distributed execution
 """
 
 __version__ = "0.3.0"

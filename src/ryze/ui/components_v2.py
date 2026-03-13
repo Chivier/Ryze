@@ -483,7 +483,7 @@ Output Directory: {results['run_output_dir']}
 
 
 class ClusterStatusPanel:
-    """Cluster status panel shown when running in distributed mode."""
+    """Cluster status panel shown when running in distributed mode with Ray."""
 
     def __init__(self) -> None:
         self._manager = None

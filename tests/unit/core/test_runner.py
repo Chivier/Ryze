@@ -31,13 +31,13 @@ class TestLocalRunner:
 
 class TestDistributedRunner:
     def test_cpu_task_runs_locally(self):
-        runner = DistributedRunner(pylet_manager=MagicMock())
+        runner = DistributedRunner(ray_manager=MagicMock())
         task = SimpleTask(TaskType.OCR)  # OCR is not a GPU task
         result = runner.run_task(task, {})
         assert result.status == TaskStatus.COMPLETED
 
     def test_gpu_task_falls_back_on_no_manager(self):
-        runner = DistributedRunner(pylet_manager=None)
+        runner = DistributedRunner(ray_manager=None)
         task = SimpleTask(TaskType.SFT_TRAIN)
         result = runner.run_task(task, {})
         assert result.status == TaskStatus.COMPLETED

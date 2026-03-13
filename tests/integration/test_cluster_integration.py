@@ -4,16 +4,18 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
-from ryze.cluster.pylet_manager import PyLetManager
+from ryze.cluster.ray_manager import RayManager
 from ryze.cluster.resource import GPUInfo, ResourceTracker
 from ryze.core.task import ResourceRequirement
 
 
 class TestClusterIntegration:
     @pytest.mark.asyncio
-    async def test_deploy_and_switch(self, mock_pylet_client):
-        mgr = PyLetManager()
-        mgr._client = mock_pylet_client
+    async def test_deploy_and_switch(self, mock_ray):
+        """Test acquiring an instance and switching to another task."""
+        mgr = RayManager()
+        mgr._ray = mock_ray
+        mgr._connected = True
 
         # Deploy first task
         task1 = MagicMock()
@@ -32,13 +34,16 @@ class TestClusterIntegration:
 
     @pytest.mark.asyncio
     async def test_health_check_failure(self):
-        mgr = PyLetManager()
-        mgr._client = AsyncMock()
-        mgr._client.health = AsyncMock(side_effect=ConnectionError("refused"))
+        """Test health check returns unhealthy when Ray raises an error."""
+        mgr = RayManager()
+        mgr._ray = MagicMock()
+        mgr._ray.nodes.side_effect = ConnectionError("refused")
+        mgr._connected = True
         health = await mgr.health_check()
         assert health["healthy"] is False
 
     def test_resource_tracker_with_allocation(self):
+        """Test ResourceTracker GPU allocation and release lifecycle."""
         tracker = ResourceTracker()
         for i in range(4):
             tracker.register_gpu(GPUInfo(gpu_id=f"gpu-{i}", name="A100", memory_total_gb=80.0))

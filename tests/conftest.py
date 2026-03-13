@@ -61,7 +61,7 @@ def sample_config():
             "benchmarks_dir": "./test_benchmarks",
         },
         "ui": {"title": "Test", "theme": "default", "server": {"host": "127.0.0.1", "port": 7860, "share": False, "debug": False}},
-        "cluster": {"mode": "local", "pylet_head_url": "http://localhost:8000", "timeout_s": 10, "max_retries": 1},
+        "cluster": {"mode": "local", "ray_address": "auto", "ray_dashboard_url": "http://localhost:8265", "timeout_s": 10, "max_retries": 1},
     }
 
 
@@ -146,26 +146,34 @@ def mock_tokenizer():
 
 
 @pytest.fixture
-def mock_pylet_client():
-    """Create a mock PyLet client."""
-    from unittest.mock import AsyncMock
-
-    client = AsyncMock()
-    client.deploy = AsyncMock(return_value={"id": "inst-001", "status": "running"})
-    client.cancel = AsyncMock(return_value=True)
-    client.adjust = AsyncMock(return_value=True)
-    client.health = AsyncMock(return_value={"status": "healthy", "nodes": 2})
-    return client
+def mock_ray():
+    """Create a mock Ray module for testing RayManager."""
+    ray = MagicMock()
+    ray.is_initialized.return_value = False
+    ray.init.return_value = None
+    ray.available_resources.return_value = {"GPU": 4, "CPU": 16, "memory": 68719476736}
+    ray.cluster_resources.return_value = {"GPU": 4, "CPU": 16, "memory": 68719476736}
+    ray.nodes.return_value = [
+        {"NodeID": "node1", "Alive": True, "Resources": {"GPU": 2}},
+        {"NodeID": "node2", "Alive": True, "Resources": {"GPU": 2}},
+    ]
+    return ray
 
 
 @pytest.fixture
-def mock_swarm_client():
-    """Create a mock SwarmPilot SDK client."""
-    from unittest.mock import AsyncMock
+def mock_ray_job_client():
+    """Create a mock Ray Job Submission client."""
+    client = MagicMock()
+    client.submit_job.return_value = "raysubmit_test123"
 
-    client = AsyncMock()
-    client.serve = AsyncMock(return_value={"name": "ryze-test", "status": "running"})
-    client.list_instances = AsyncMock(return_value=[{"name": "inst-1", "model": "test", "gpu": 1}])
-    client.scale = AsyncMock(return_value={"model": "test", "replicas": 2})
-    client.terminate = AsyncMock(return_value=True)
+    # Mock job info objects
+    job_info = MagicMock()
+    job_info.submission_id = "raysubmit_test123"
+    job_info.job_id = "raysubmit_test123"
+    job_info.status = MagicMock()
+    job_info.status.value = "RUNNING"
+    job_info.entrypoint = "python train.py"
+
+    client.list_jobs.return_value = [job_info]
+    client.stop_job.return_value = True
     return client

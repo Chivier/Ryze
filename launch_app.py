@@ -96,7 +96,7 @@ def setup_environment(config: dict):
 
     logger = logging.getLogger(__name__)
     logger.info("Ryze-ACL Pipeline v2 starting...")
-    logger.info(f"Configuration loaded from: {config_path}")
+    logger.info(f"Configuration loaded from: {config}")
 
 
 def main():
@@ -140,7 +140,7 @@ def main():
         type=str,
         choices=['local', 'distributed'],
         default='local',
-        help='Execution mode: local or distributed (requires swarmpilot)'
+        help='Execution mode: local or distributed (requires ray)'
     )
 
     args = parser.parse_args()

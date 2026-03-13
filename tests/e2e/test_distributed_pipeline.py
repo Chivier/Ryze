@@ -41,7 +41,7 @@ class TestDistributedPipeline:
         mock_mgr = MagicMock()
         mock_mgr.acquire_instance = MagicMock(return_value=None)  # No cluster available
 
-        runner = DistributedRunner(pylet_manager=mock_mgr)
+        runner = DistributedRunner(ray_manager=mock_mgr)
         pipeline = PipelineOrchestrator()
 
         cpu_task = CPUTask()

@@ -1,12 +1,12 @@
-"""Ryze cluster module: SwarmPilot/PyLet integration for distributed execution."""
+"""Ryze cluster module: Ray integration for distributed execution."""
 
-from .pylet_manager import PyLetManager
+from .ray_manager import RayManager
+from .ray_job_client import RayJobClient
 from .resource import GPUInfo, ResourceTracker
-from .swarm_client import SwarmClient
 
 __all__ = [
-    "PyLetManager",
-    "SwarmClient",
+    "RayManager",
+    "RayJobClient",
     "ResourceTracker",
     "GPUInfo",
 ]

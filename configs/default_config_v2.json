@@ -86,7 +86,8 @@
   },
   "cluster": {
     "mode": "local",
-    "pylet_head_url": "http://localhost:8000",
+    "ray_address": "auto",
+    "ray_dashboard_url": "http://localhost:8265",
     "timeout_s": 300,
     "max_retries": 3
   }
