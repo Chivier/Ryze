@@ -5,7 +5,7 @@ A comprehensive pipeline for fine-tuning LLMs on domain-specific documents. Conv
 ## Pipeline Overview
 
 ```
-PDF Library  →  OCR + QA Generation  →  RL Training  →  Fine-tuned Model
+PDF Library  →  OCR + QA Generation → Fine-tuned Model  →  RL Training   
 ```
 
 ### Step 1 — Data Processing
