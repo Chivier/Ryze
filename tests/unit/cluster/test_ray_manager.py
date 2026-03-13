@@ -55,8 +55,7 @@ class TestRayManager:
     # acquire_instance
     # ------------------------------------------------------------------
 
-    @pytest.mark.asyncio
-    async def test_acquire_instance_success(self):
+    def test_acquire_instance_success(self):
         """Acquiring with sufficient GPUs should store instance info and return it."""
         mock_ray = MagicMock()
         mock_ray.available_resources.return_value = {"GPU": 4, "CPU": 16}
@@ -71,7 +70,7 @@ class TestRayManager:
         reqs.gpu_count = 2
         reqs.memory_gb = 16.0
 
-        result = await mgr.acquire_instance(task, reqs)
+        result = mgr.acquire_instance(task, reqs)
 
         assert result["task_id"] == "sft_train_abc12345"
         assert result["gpu_count"] == 2
@@ -79,8 +78,7 @@ class TestRayManager:
         assert result["instance_id"].startswith("ray-")
         assert "sft_train_abc12345" in mgr._active_instances
 
-    @pytest.mark.asyncio
-    async def test_acquire_instance_insufficient_gpus(self):
+    def test_acquire_instance_insufficient_gpus(self):
         """Requesting more GPUs than available should raise ClusterError."""
         mock_ray = MagicMock()
         mock_ray.available_resources.return_value = {"GPU": 2, "CPU": 16}
@@ -95,10 +93,9 @@ class TestRayManager:
         reqs.gpu_count = 4
 
         with pytest.raises(ClusterError, match="Insufficient GPUs"):
-            await mgr.acquire_instance(task, reqs)
+            mgr.acquire_instance(task, reqs)
 
-    @pytest.mark.asyncio
-    async def test_acquire_instance_exception_wrapping(self):
+    def test_acquire_instance_exception_wrapping(self):
         """An unexpected RuntimeError from Ray should be wrapped in ClusterError."""
         mock_ray = MagicMock()
         mock_ray.available_resources.side_effect = RuntimeError("cluster gone")
@@ -113,14 +110,13 @@ class TestRayManager:
         reqs.gpu_count = 1
 
         with pytest.raises(ClusterError, match="Failed to acquire instance"):
-            await mgr.acquire_instance(task, reqs)
+            mgr.acquire_instance(task, reqs)
 
     # ------------------------------------------------------------------
     # release_instance
     # ------------------------------------------------------------------
 
-    @pytest.mark.asyncio
-    async def test_release_instance_success(self):
+    def test_release_instance_success(self):
         """Releasing a tracked instance should remove it and return True."""
         mgr = RayManager()
         mgr._active_instances["task-A"] = {
@@ -130,24 +126,22 @@ class TestRayManager:
             "status": "running",
         }
 
-        result = await mgr.release_instance("task-A")
+        result = mgr.release_instance("task-A")
 
         assert result is True
         assert "task-A" not in mgr._active_instances
 
-    @pytest.mark.asyncio
-    async def test_release_instance_not_found(self):
+    def test_release_instance_not_found(self):
         """Releasing a non-existent task should return False without raising."""
         mgr = RayManager()
-        result = await mgr.release_instance("nonexistent")
+        result = mgr.release_instance("nonexistent")
         assert result is False
 
     # ------------------------------------------------------------------
     # switch_task
     # ------------------------------------------------------------------
 
-    @pytest.mark.asyncio
-    async def test_switch_task(self):
+    def test_switch_task(self):
         """switch_task should release old task, then acquire for the new one."""
         mock_ray = MagicMock()
         mock_ray.available_resources.return_value = {"GPU": 4}
@@ -169,7 +163,7 @@ class TestRayManager:
         new_reqs.memory_gb = 16.0
         new_task.resource_requirements.return_value = new_reqs
 
-        result = await mgr.switch_task("old-task", new_task)
+        result = mgr.switch_task("old-task", new_task)
 
         assert result["task_id"] == "new-task"
         assert "old-task" not in mgr._active_instances
@@ -179,21 +173,19 @@ class TestRayManager:
     # list_active
     # ------------------------------------------------------------------
 
-    @pytest.mark.asyncio
-    async def test_list_active_empty(self):
+    def test_list_active_empty(self):
         """An empty manager should return an empty list."""
         mgr = RayManager()
-        active = await mgr.list_active()
+        active = mgr.list_active()
         assert active == []
 
-    @pytest.mark.asyncio
-    async def test_list_active_with_instances(self):
+    def test_list_active_with_instances(self):
         """list_active should return all tracked instances."""
         mgr = RayManager()
         mgr._active_instances["t1"] = {"task_id": "t1", "gpu_count": 1}
         mgr._active_instances["t2"] = {"task_id": "t2", "gpu_count": 2}
 
-        active = await mgr.list_active()
+        active = mgr.list_active()
 
         assert len(active) == 2
         task_ids = {inst["task_id"] for inst in active}
@@ -203,8 +195,7 @@ class TestRayManager:
     # health_check
     # ------------------------------------------------------------------
 
-    @pytest.mark.asyncio
-    async def test_health_check_healthy(self):
+    def test_health_check_healthy(self):
         """A healthy cluster should return healthy=True with resource details."""
         mock_ray = MagicMock()
         mock_ray.nodes.return_value = [{"NodeID": "node-1", "Alive": True}]
@@ -215,15 +206,14 @@ class TestRayManager:
         mgr._ray = mock_ray
         mgr._connected = True
 
-        health = await mgr.health_check()
+        health = mgr.health_check()
 
         assert health["healthy"] is True
         assert health["nodes"] == [{"NodeID": "node-1", "Alive": True}]
         assert health["cluster_resources"] == {"GPU": 8, "CPU": 32}
         assert health["available_resources"] == {"GPU": 4, "CPU": 16}
 
-    @pytest.mark.asyncio
-    async def test_health_check_unhealthy(self):
+    def test_health_check_unhealthy(self):
         """If Ray raises during health_check, the result should be healthy=False."""
         mock_ray = MagicMock()
         mock_ray.nodes.side_effect = RuntimeError("cluster unreachable")
@@ -232,7 +222,7 @@ class TestRayManager:
         mgr._ray = mock_ray
         mgr._connected = True
 
-        health = await mgr.health_check()
+        health = mgr.health_check()
 
         assert health["healthy"] is False
         assert "cluster unreachable" in health["error"]

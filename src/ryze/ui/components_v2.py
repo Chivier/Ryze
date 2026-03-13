@@ -503,12 +503,8 @@ class ClusterStatusPanel:
 
                     if self._manager is None:
                         return {"status": "not connected"}, []
-                    import asyncio
-
-                    loop = asyncio.new_event_loop()
-                    health = loop.run_until_complete(self._manager.health_check())
-                    tasks = loop.run_until_complete(self._manager.list_active())
-                    loop.close()
+                    health = self._manager.health_check()
+                    tasks = self._manager.list_active()
                     return health, tasks
                 except Exception as e:
                     return {"error": str(e)}, []

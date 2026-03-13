@@ -6,7 +6,6 @@ execution backend instead of SwarmPilot/PyLet.
 
 from __future__ import annotations
 
-import asyncio
 import logging
 import uuid
 from typing import Any
@@ -78,7 +77,7 @@ class RayManager:
         logger.info("Connected to Ray cluster at address=%s", self._address)
         return self._ray
 
-    async def acquire_instance(
+    def acquire_instance(
         self,
         task: Any,
         reqs: Any,
@@ -132,7 +131,7 @@ class RayManager:
         except Exception as exc:
             raise ClusterError(f"Failed to acquire instance: {exc}")
 
-    async def release_instance(self, task_id: str) -> bool:
+    def release_instance(self, task_id: str) -> bool:
         """Release the resources associated with *task_id*.
 
         Removes the allocation record from ``_active_instances``.  If no
@@ -154,7 +153,7 @@ class RayManager:
         logger.info("Released Ray instance %s for task %s", instance["instance_id"], task_id)
         return True
 
-    async def switch_task(
+    def switch_task(
         self,
         from_task_id: str,
         to_task: Any,
@@ -175,11 +174,11 @@ class RayManager:
             ``acquire_instance`` output).
         """
         logger.info("Switching from task %s to %s", from_task_id, to_task.task_id)
-        await self.release_instance(from_task_id)
+        self.release_instance(from_task_id)
         reqs = to_task.resource_requirements()
-        return await self.acquire_instance(to_task, reqs)
+        return self.acquire_instance(to_task, reqs)
 
-    async def list_active(self) -> list[dict[str, Any]]:
+    def list_active(self) -> list[dict[str, Any]]:
         """Return a snapshot of all currently-tracked allocations.
 
         Returns:
@@ -187,7 +186,7 @@ class RayManager:
         """
         return list(self._active_instances.values())
 
-    async def health_check(self) -> dict[str, Any]:
+    def health_check(self) -> dict[str, Any]:
         """Probe the Ray cluster and return a health summary.
 
         Queries ``ray.nodes()``, ``ray.cluster_resources()``, and
