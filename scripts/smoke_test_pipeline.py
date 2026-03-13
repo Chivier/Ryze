@@ -136,7 +136,8 @@ def build_smoke_pipeline(work_dir: str, model_name: str):
 
     data_id = pipeline.add_task(data_task)
     sft_id = pipeline.add_task(sft_task, depends_on=[data_id])
-    pipeline.add_task(grpo_task, depends_on=[sft_id])
+    # GRPO needs merged_model_path from SFT + grpo_data_path from data stage
+    pipeline.add_task(grpo_task, depends_on=[sft_id, data_id])
 
     return pipeline
 
@@ -175,6 +176,11 @@ def main():
         help="Working directory (default: temp dir, auto-cleaned)",
     )
     parser.add_argument(
+        "--ray-address",
+        default=None,
+        help="Ray cluster address (default: None starts local Ray; use 'auto' for existing cluster)",
+    )
+    parser.add_argument(
         "--keep",
         action="store_true",
         help="Keep working directory after test",
@@ -204,7 +210,7 @@ def main():
             from ryze.cluster.ray_manager import RayManager
             from ryze.core.runner import DistributedRunner
 
-            ray_manager = RayManager(address="auto")
+            ray_manager = RayManager(address=args.ray_address)
             runner = DistributedRunner(ray_manager=ray_manager)
         else:
             from ryze.core.runner import LocalRunner

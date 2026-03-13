@@ -28,12 +28,12 @@ class RayManager:
         timeout_s: Default timeout in seconds for blocking operations.
     """
 
-    def __init__(self, address: str = "auto", timeout_s: int = 300) -> None:
+    def __init__(self, address: str | None = "auto", timeout_s: int = 300) -> None:
         """Initialise the RayManager.
 
         Args:
             address: Ray cluster address.  Use ``"auto"`` to connect to an
-                existing cluster or to start one locally.
+                existing cluster, or ``None`` to start a local Ray runtime.
             timeout_s: Default timeout in seconds for acquire / health-check
                 operations.
         """
@@ -61,6 +61,13 @@ class RayManager:
             return self._ray
 
         try:
+            # Disable Ray's uv-run runtime env hook BEFORE importing ray.
+            # The hook auto-packages the working directory into an isolated
+            # venv that lacks `ray` itself, crashing workers.  The constant
+            # is evaluated at `import ray` time, so env must be set first.
+            import os
+
+            os.environ.setdefault("RAY_ENABLE_UV_RUN_RUNTIME_ENV", "0")
             import ray  # noqa: WPS433 – intentional lazy import
         except ImportError:
             raise ClusterError(
