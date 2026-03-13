@@ -145,9 +145,6 @@ class RyzeConfig(BaseModel):
             data["cluster"] = ClusterConfig().model_dump()
         else:
             cluster = data["cluster"]
-            # Migrate pylet_head_url -> ray_address
-            if "pylet_head_url" in cluster:
-                del cluster["pylet_head_url"]
             if "ray_address" not in cluster:
                 cluster["ray_address"] = "auto"
             if "ray_dashboard_url" not in cluster:

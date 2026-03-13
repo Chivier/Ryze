@@ -1,8 +1,4 @@
-"""Ray cluster integration for GPU task management.
-
-Drop-in replacement for PyLetManager that uses Ray as the distributed
-execution backend instead of SwarmPilot/PyLet.
-"""
+"""Ray cluster integration for GPU task management."""
 
 from __future__ import annotations
 
@@ -18,9 +14,8 @@ logger = logging.getLogger(__name__)
 class RayManager:
     """Manages GPU instances via Ray for task scheduling and resource allocation.
 
-    This is the Ray-based counterpart to PyLetManager.  It lazily connects to
-    an existing Ray cluster (or starts a local one) and tracks GPU assignments
-    for pipeline tasks.
+    Lazily connects to an existing Ray cluster (or starts a local one) and
+    tracks GPU assignments for pipeline tasks.
 
     Parameters:
         address: Ray cluster address.  ``"auto"`` connects to an existing

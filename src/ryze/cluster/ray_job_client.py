@@ -1,4 +1,4 @@
-"""Ray Job Submission client — drop-in replacement for SwarmClient.
+"""Ray Job Submission client.
 
 Wraps the Ray Job Submission SDK so that the rest of the Ryze codebase can
 schedule GPU training jobs on a Ray cluster without importing Ray directly.
@@ -17,8 +17,8 @@ logger = logging.getLogger(__name__)
 class RayJobClient:
     """Thin wrapper around Ray's ``JobSubmissionClient``.
 
-    Provides the same public surface that ``SwarmClient`` exposed so that
-    callers (e.g. ``DistributedRunner``) can switch backends transparently.
+    Callers (e.g. ``DistributedRunner``) use this to submit and manage
+    GPU training jobs on a Ray cluster.
 
     Parameters
     ----------
