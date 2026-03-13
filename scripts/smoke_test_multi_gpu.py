@@ -365,7 +365,7 @@ def build_multi_gpu_pipeline(
         "num_epochs": 3,
         "max_length": 256,
         "max_new_tokens": 32,
-        "num_samples_per_prompt": 2,
+        "num_samples_per_prompt": 4,
         "temperature": 0.8,
         "kl_coef": 0.1,
         "clip_range": 0.2,
