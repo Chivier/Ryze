@@ -108,14 +108,13 @@ class RyzeGRPOTrainer:
         for param in self.ref_model.parameters():
             param.requires_grad = False
 
-        # Initialize value head (match model dtype)
+        # Initialize value head in float32 for numerical stability
         hidden_size = self.model.config.hidden_size
-        model_dtype = next(self.model.parameters()).dtype
         self.value_head = nn.Sequential(
             nn.Linear(hidden_size, hidden_size),
             nn.ReLU(),
             nn.Linear(hidden_size, 1)
-        ).to(device=self.device, dtype=model_dtype)
+        ).to(device=self.device, dtype=torch.float32)
 
         # Setup optimizer for both LoRA and value head
         optimizer_params = [
@@ -240,6 +239,36 @@ class RyzeGRPOTrainer:
 
         return all_responses, torch.stack(all_log_probs).to(self.device)
 
+    @staticmethod
+    def _per_token_log_probs(
+        logits: torch.Tensor, input_ids: torch.Tensor, attention_mask: torch.Tensor
+    ) -> torch.Tensor:
+        """Compute mean per-token log prob of actual next tokens (padding-invariant).
+
+        Args:
+            logits: Model output logits [B, L, V].
+            input_ids: Input token ids [B, L].
+            attention_mask: Attention mask [B, L] (1 for real tokens, 0 for padding).
+
+        Returns:
+            Per-sample mean log prob [B].
+        """
+        logits_f = logits.float()
+        # Shift: predict next token from current position
+        shift_log_probs = F.log_softmax(logits_f[:, :-1, :], dim=-1)  # [B, L-1, V]
+        shift_labels = input_ids[:, 1:]  # [B, L-1]
+        shift_mask = attention_mask[:, 1:]  # [B, L-1]
+
+        # Gather log prob for each actual next token
+        token_log_probs = shift_log_probs.gather(
+            2, shift_labels.unsqueeze(-1)
+        ).squeeze(-1)  # [B, L-1]
+
+        # Mean over non-padding positions per sample
+        masked_sum = (token_log_probs * shift_mask).sum(dim=1)
+        num_tokens = shift_mask.sum(dim=1).clamp(min=1)
+        return masked_sum / num_tokens  # [B]
+
     def compute_advantages(self, rewards: torch.Tensor, values: torch.Tensor) -> torch.Tensor:
         """Compute advantages using GAE or simple advantage"""
         advantages = rewards - values
@@ -286,8 +315,19 @@ class RyzeGRPOTrainer:
             outputs = self.model(**inputs, output_hidden_states=True)
             last_hidden_states = outputs.hidden_states[-1]
             # Use the last token's hidden state
-            last_token_hidden = last_hidden_states[:, -1, :]
+            last_token_hidden = last_hidden_states[:, -1, :].float()
             values = self.value_head(last_token_hidden).squeeze()
+
+            # Compute old log probs via proper per-token log probs (padding-invariant)
+            old_log_probs = self._per_token_log_probs(
+                outputs.logits, inputs['input_ids'], inputs['attention_mask']
+            )
+
+            # Compute reference log probs once (shared across GRPO epochs)
+            ref_outputs = self.ref_model(**inputs)
+            ref_log_probs_all = self._per_token_log_probs(
+                ref_outputs.logits, inputs['input_ids'], inputs['attention_mask']
+            )
 
         # Compute advantages
         advantages = self.compute_advantages(normalized_rewards, values)
@@ -297,6 +337,7 @@ class RyzeGRPOTrainer:
         total_policy_loss = 0
         total_value_loss = 0
         total_kl = 0
+        num_updates = 0
 
         for epoch in range(self.grpo_epochs):
             # Shuffle data
@@ -307,9 +348,10 @@ class RyzeGRPOTrainer:
 
                 # Get batch data
                 batch_texts = [all_texts[idx] for idx in batch_indices]
-                batch_advantages = advantages[batch_indices]
-                batch_rewards = normalized_rewards[batch_indices]
-                batch_old_log_probs = old_log_probs.view(-1)[batch_indices]
+                batch_advantages = advantages[batch_indices].float()
+                batch_rewards = normalized_rewards[batch_indices].float()
+                batch_old_log_probs = old_log_probs[batch_indices]
+                batch_ref_log_probs = ref_log_probs_all[batch_indices]
 
                 # Forward pass
                 batch_inputs = self.tokenizer(
@@ -324,38 +366,48 @@ class RyzeGRPOTrainer:
 
                 # Get current values
                 last_hidden_states = outputs.hidden_states[-1]
-                last_token_hidden = last_hidden_states[:, -1, :]
+                last_token_hidden = last_hidden_states[:, -1, :].float()
                 current_values = self.value_head(last_token_hidden).squeeze(-1)
 
-                # Calculate current log probs (simplified) - compute in float32 for stability
-                logits = outputs.logits.float()
-                current_log_probs = F.log_softmax(logits, dim=-1).mean(dim=(1, 2))
+                # Compute per-token log probs (padding-invariant)
+                current_log_probs = self._per_token_log_probs(
+                    outputs.logits, batch_inputs['input_ids'], batch_inputs['attention_mask']
+                )
 
-                # Compute KL divergence with reference model
+                # KL divergence with reference model
                 with torch.no_grad():
                     ref_outputs = self.ref_model(**batch_inputs)
-                    ref_logits = ref_outputs.logits.float()
-                    ref_log_probs = F.log_softmax(ref_logits, dim=-1).mean(dim=(1, 2))
-
-                kl_div = (current_log_probs - ref_log_probs).mean()
-
-                # Cast to float32 for loss computation
-                batch_advantages_f = batch_advantages.float()
-                batch_old_log_probs_f = batch_old_log_probs.float()
+                    micro_ref_log_probs = self._per_token_log_probs(
+                        ref_outputs.logits, batch_inputs['input_ids'],
+                        batch_inputs['attention_mask']
+                    )
+                kl_div = (current_log_probs - micro_ref_log_probs).mean()
 
                 # Policy loss with clipping
-                ratio = torch.exp(current_log_probs - batch_old_log_probs_f)
-                policy_loss_1 = -batch_advantages_f * ratio
-                policy_loss_2 = -batch_advantages_f * torch.clamp(
+                log_ratio = current_log_probs - batch_old_log_probs
+                log_ratio = torch.clamp(log_ratio, -5.0, 5.0)
+                ratio = torch.exp(log_ratio)
+
+                policy_loss_1 = -batch_advantages * ratio
+                policy_loss_2 = -batch_advantages * torch.clamp(
                     ratio, 1 - self.clip_range, 1 + self.clip_range
                 )
                 policy_loss = torch.max(policy_loss_1, policy_loss_2).mean()
 
                 # Value loss
-                value_loss = F.mse_loss(current_values.float(), batch_rewards.float())
+                value_loss = F.mse_loss(current_values.float(), batch_rewards)
 
                 # Total loss
                 loss = policy_loss + 0.5 * value_loss + self.kl_coef * kl_div
+
+                # Skip NaN losses to protect model weights
+                if torch.isnan(loss) or torch.isinf(loss):
+                    logger.warning(
+                        f"Skipping step with NaN/Inf loss "
+                        f"(policy={policy_loss.item():.4f}, value={value_loss.item():.4f}, "
+                        f"kl={kl_div.item():.4f})"
+                    )
+                    continue
 
                 # Backward pass
                 self.optimizer.zero_grad()
@@ -370,8 +422,10 @@ class RyzeGRPOTrainer:
                 total_policy_loss += policy_loss.item()
                 total_value_loss += value_loss.item()
                 total_kl += kl_div.item()
+                num_updates += 1
 
-        num_updates = (len(all_responses) // self.micro_batch_size) * self.grpo_epochs
+        if num_updates == 0:
+            num_updates = 1
 
         return {
             'loss': total_loss / num_updates,
