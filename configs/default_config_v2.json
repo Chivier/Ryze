@@ -83,5 +83,11 @@
       "share": false,
       "debug": false
     }
+  },
+  "cluster": {
+    "mode": "local",
+    "pylet_head_url": "http://localhost:8000",
+    "timeout_s": 300,
+    "max_retries": 3
   }
 }

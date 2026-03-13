@@ -1,15 +1,15 @@
 """RL Trainer Module using PPO"""
+import json
+import logging
 import os
+from datetime import datetime
+from typing import Any, Dict, List, Optional
+
+import numpy as np
 import torch
 import torch.nn as nn
-from torch.utils.data import DataLoader
-from transformers import AutoModelForCausalLM, AutoTokenizer
-from typing import Dict, Any, Optional, List
-import logging
-from datetime import datetime
-import json
-import numpy as np
 from tqdm import tqdm
+from transformers import AutoModelForCausalLM, AutoTokenizer
 
 from .dataset_loader import DatasetLoader
 

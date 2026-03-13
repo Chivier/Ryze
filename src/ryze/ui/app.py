@@ -1,10 +1,11 @@
 """Main Gradio Application"""
-import gradio as gr
-import os
 import logging
-from typing import Optional, Dict, Any
+import os
+from typing import Any, Dict, Optional
 
-from .components import DataTab, TrainingTab, EvaluationTab
+import gradio as gr
+
+from .components import DataTab, EvaluationTab, TrainingTab
 
 # Setup logging
 logging.basicConfig(

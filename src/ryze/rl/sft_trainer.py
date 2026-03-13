@@ -1,20 +1,17 @@
 """SFT Trainer Module"""
+import json
+import logging
 import os
+from datetime import datetime
+from typing import Any, Dict, Optional
+
 import torch
-import torch.nn as nn
-from torch.utils.data import DataLoader
 from transformers import (
     AutoModelForCausalLM,
     AutoTokenizer,
-    get_linear_schedule_with_warmup,
+    Trainer,
     TrainingArguments,
-    Trainer
 )
-from typing import Dict, Any, Optional
-import logging
-from datetime import datetime
-import json
-from pathlib import Path
 
 from .dataset_loader import DatasetLoader
 
@@ -93,7 +90,7 @@ class RyzeSFTTrainer:
             fp16=torch.cuda.is_available(),
             logging_dir=os.path.join(run_output_dir, 'logs'),
             logging_steps=10,
-            evaluation_strategy="steps" if val_data_path else "no",
+            eval_strategy="steps" if val_data_path else "no",
             eval_steps=500 if val_data_path else None,
             save_strategy="steps",
             save_steps=500,

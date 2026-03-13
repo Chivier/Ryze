@@ -89,6 +89,12 @@ def create_default_config(output_path: str):
                 "share": False,
                 "debug": False
             }
+        },
+        "cluster": {
+            "mode": "local",
+            "pylet_head_url": "http://localhost:8000",
+            "timeout_s": 300,
+            "max_retries": 3
         }
     }
 

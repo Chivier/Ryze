@@ -1,14 +1,18 @@
 """PDF OCR Processor for Ryze Data Module"""
+from __future__ import annotations
+
+import io
+import logging
 import os
-import json
-from typing import List, Dict, Any, Optional
+from pathlib import Path
+from typing import TYPE_CHECKING, Any, Dict, List, Optional
+
 import fitz  # PyMuPDF
 import pytesseract
 from PIL import Image
-import io
-import numpy as np
-from pathlib import Path
-import logging
+
+if TYPE_CHECKING:
+    from ..core.task import RyzeTask
 
 logger = logging.getLogger(__name__)
 
@@ -105,3 +109,34 @@ class PDFOCRProcessor:
             'page_count': len(images),
             'status': 'success'
         }
+
+    def as_task(self, pdf_path: str = "", output_dir: str = "./output/markdown") -> RyzeTask:
+        """Create a RyzeTask wrapper for this processor."""
+        from ..core.task import ResourceRequirement, RyzeTask, TaskResult, TaskStatus, TaskType
+
+        processor = self
+
+        class OCRTask(RyzeTask):
+            def __init__(self, pdf_path: str, output_dir: str):
+                super().__init__(
+                    task_type=TaskType.OCR,
+                    inputs={"pdf_path": pdf_path, "output_dir": output_dir},
+                    name=f"OCR: {Path(pdf_path).name}" if pdf_path else "OCR",
+                )
+
+            def resource_requirements(self) -> ResourceRequirement:
+                return ResourceRequirement(gpu_count=0, memory_gb=2.0, estimated_duration_s=60)
+
+            def validate_inputs(self) -> bool:
+                p = self.inputs.get("pdf_path", "")
+                return bool(p)
+
+            def execute(self, inputs: dict) -> TaskResult:
+                pdf = inputs.get("pdf_path", self.inputs.get("pdf_path", ""))
+                out = inputs.get("output_dir", self.inputs.get("output_dir", "./output/markdown"))
+                result = processor.process_pdf(pdf, out)
+                if result.get("status") == "success":
+                    return TaskResult(status=TaskStatus.COMPLETED, output=result)
+                return TaskResult(status=TaskStatus.FAILED, error="OCR processing failed", output=result)
+
+        return OCRTask(pdf_path, output_dir)

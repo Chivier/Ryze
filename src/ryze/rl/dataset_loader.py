@@ -1,10 +1,9 @@
 """Dataset Loader for Training"""
 import json
-import torch
-from torch.utils.data import Dataset, DataLoader
-from typing import Dict, List, Any, Optional
-from transformers import AutoTokenizer
 import logging
+from typing import Dict, Optional
+
+from torch.utils.data import DataLoader, Dataset
 
 logger = logging.getLogger(__name__)
 

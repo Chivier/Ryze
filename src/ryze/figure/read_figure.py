@@ -1,4 +1,3 @@
-from nerif.agent import VisionAgent
 
 
 def read_figure(image_path):
@@ -7,4 +6,3 @@ def read_figure(image_path):
     """
     image = cv2.imread(image_path)
     # convert
-    

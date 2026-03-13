@@ -11,7 +11,7 @@ from pathlib import Path
 # Add src to Python path
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), 'src'))
 
-from ui.app_v2 import RyzeGradioAppV2
+from ryze.ui.app_v2 import RyzeGradioAppV2
 
 
 def load_config(config_path: str) -> dict:
@@ -135,6 +135,13 @@ def main():
         action='store_true',
         help='Skip dependency checking'
     )
+    parser.add_argument(
+        '--mode',
+        type=str,
+        choices=['local', 'distributed'],
+        default='local',
+        help='Execution mode: local or distributed (requires swarmpilot)'
+    )
 
     args = parser.parse_args()
 
@@ -161,6 +168,12 @@ def main():
             create_default_config(config_path)
 
     config = load_config(config_path)
+
+    # Apply mode override
+    if args.mode == 'distributed':
+        if 'cluster' not in config:
+            config['cluster'] = {}
+        config['cluster']['mode'] = 'distributed'
 
     # Setup environment
     setup_environment(config)

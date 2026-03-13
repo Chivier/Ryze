@@ -1,16 +1,11 @@
 """LoRA utilities for training and merging"""
-import torch
-from transformers import AutoModelForCausalLM, AutoTokenizer
-from peft import (
-    LoraConfig,
-    get_peft_model,
-    prepare_model_for_kbit_training,
-    TaskType,
-    PeftModel
-)
-from typing import Dict, Any, Optional
 import logging
 import os
+from typing import Optional
+
+import torch
+from peft import LoraConfig, PeftModel, TaskType, get_peft_model, prepare_model_for_kbit_training
+from transformers import AutoModelForCausalLM, AutoTokenizer
 
 logger = logging.getLogger(__name__)
 
@@ -127,7 +122,7 @@ class LoRAManager:
         hub_model_id: Optional[str] = None
     ) -> str:
         """Merge LoRA weights into base model"""
-        logger.info(f"Merging LoRA adapter into base model...")
+        logger.info("Merging LoRA adapter into base model...")
         logger.info(f"Base model: {base_model_path}")
         logger.info(f"LoRA adapter: {lora_adapter_path}")
 
@@ -170,7 +165,7 @@ class LoRAManager:
         device_map: str = "auto"
     ) -> tuple:
         """Load model with LoRA adapter (without merging)"""
-        logger.info(f"Loading model with LoRA adapter...")
+        logger.info("Loading model with LoRA adapter...")
 
         # Load base model
         model = AutoModelForCausalLM.from_pretrained(

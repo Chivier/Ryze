@@ -1,16 +1,22 @@
 """Main Evaluator Module"""
-import os
-import torch
-from transformers import AutoModelForCausalLM, AutoTokenizer
-from typing import Dict, Any, List, Optional
-import logging
-from datetime import datetime
-import json
-from pathlib import Path
-from tqdm import tqdm
+from __future__ import annotations
 
-from .metrics import MetricsCalculator
+import json
+import logging
+import os
+from datetime import datetime
+from pathlib import Path
+from typing import TYPE_CHECKING, Any, Dict, List, Optional
+
+import torch
+from tqdm import tqdm
+from transformers import AutoModelForCausalLM, AutoTokenizer
+
 from .benchmark import BenchmarkRunner
+from .metrics import MetricsCalculator
+
+if TYPE_CHECKING:
+    from ..core.task import RyzeTask
 
 logger = logging.getLogger(__name__)
 
@@ -306,3 +312,33 @@ class RyzeEvaluator:
             f.write('\n'.join(report_lines))
 
         logger.info(f"Comparison report saved to: {report_path}")
+
+    def as_task(self, model_path: str = "", benchmark_name: str = "general_qa") -> RyzeTask:
+        """Create a RyzeTask wrapper for this evaluator."""
+        from ..core.task import ResourceRequirement, RyzeTask, TaskResult, TaskStatus, TaskType
+
+        evaluator = self
+
+        class EvaluationTask(RyzeTask):
+            def __init__(self, model_path: str, benchmark_name: str):
+                super().__init__(
+                    task_type=TaskType.EVALUATION,
+                    inputs={"model_path": model_path, "benchmark_name": benchmark_name},
+                    name="Evaluation",
+                )
+
+            def resource_requirements(self) -> ResourceRequirement:
+                return ResourceRequirement(gpu_count=1, memory_gb=8.0, estimated_duration_s=600)
+
+            def validate_inputs(self) -> bool:
+                return True
+
+            def execute(self, inputs: dict) -> TaskResult:
+                mp = inputs.get("merged_model_path") or inputs.get("model_path", "")
+                bn = inputs.get("benchmark_name", "general_qa")
+                if not mp:
+                    return TaskResult(status=TaskStatus.FAILED, error="No model_path provided")
+                results = evaluator.evaluate_model(mp, bn)
+                return TaskResult(status=TaskStatus.COMPLETED, output=results)
+
+        return EvaluationTask(model_path, benchmark_name)

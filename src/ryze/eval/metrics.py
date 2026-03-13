@@ -1,10 +1,10 @@
 """Metrics Calculator for Model Evaluation"""
-import numpy as np
-from typing import List, Dict, Any, Tuple
-from collections import Counter
-import string
-from sklearn.metrics import accuracy_score, f1_score, precision_recall_fscore_support
 import logging
+import string
+from collections import Counter
+from typing import Dict, List
+
+import numpy as np
 
 logger = logging.getLogger(__name__)
 

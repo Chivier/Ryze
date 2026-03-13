@@ -1,8 +1,8 @@
 # Ryze UI Module - Gradio Interface
 from .app import RyzeGradioApp
 from .app_v2 import RyzeGradioAppV2
-from .components import DataTab, TrainingTab, EvaluationTab
-from .components_v2 import DataTabV2, TrainingTabV2, EvaluationTabV2
+from .components import DataTab, EvaluationTab, TrainingTab
+from .components_v2 import DataTabV2, EvaluationTabV2, TrainingTabV2
 
 __all__ = [
     "RyzeGradioApp",

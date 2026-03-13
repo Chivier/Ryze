@@ -1,13 +1,18 @@
 """Main Data Processing Module"""
-import os
-from typing import Dict, Any, List, Optional
-from pathlib import Path
-import logging
-import json
-from datetime import datetime
+from __future__ import annotations
 
-from .ocr import PDFOCRProcessor
+import json
+import logging
+import os
+from datetime import datetime
+from pathlib import Path
+from typing import TYPE_CHECKING, Any, Dict, List, Optional
+
 from .dataset import SFTDatasetGenerator
+from .ocr import PDFOCRProcessor
+
+if TYPE_CHECKING:
+    from ..core.task import RyzeTask
 
 logger = logging.getLogger(__name__)
 
@@ -91,3 +96,34 @@ class RyzeDataProcessor:
         logger.info(f"Found {len(pdf_files)} PDF files to process")
 
         return self.process_batch([str(f) for f in pdf_files])
+
+    def as_task(self, pdf_path: str = "") -> RyzeTask:
+        """Create a RyzeTask wrapper for this processor (OCR + dataset gen)."""
+        from ..core.task import ResourceRequirement, RyzeTask, TaskResult, TaskStatus, TaskType
+
+        processor = self
+
+        class DataProcessorTask(RyzeTask):
+            def __init__(self, pdf_path: str):
+                super().__init__(
+                    task_type=TaskType.OCR,
+                    inputs={"pdf_path": pdf_path},
+                    name=f"Process: {Path(pdf_path).name}" if pdf_path else "Data Processing",
+                )
+
+            def resource_requirements(self) -> ResourceRequirement:
+                return ResourceRequirement(gpu_count=0, memory_gb=2.0, estimated_duration_s=120)
+
+            def validate_inputs(self) -> bool:
+                return True
+
+            def execute(self, inputs: dict) -> TaskResult:
+                pdf = inputs.get("pdf_path", "")
+                if not pdf:
+                    return TaskResult(status=TaskStatus.FAILED, error="No pdf_path provided")
+                result = processor.process_single_pdf(pdf)
+                if result.get("status") == "success":
+                    return TaskResult(status=TaskStatus.COMPLETED, output=result)
+                return TaskResult(status=TaskStatus.FAILED, error=result.get("error", "Processing failed"))
+
+        return DataProcessorTask(pdf_path)

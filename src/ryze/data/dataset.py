@@ -1,11 +1,16 @@
 """SFT Dataset Generator for Ryze Data Module"""
+from __future__ import annotations
+
 import json
-import os
-from typing import List, Dict, Any, Optional
-from pathlib import Path
 import logging
-from datetime import datetime
+import os
 import random
+from datetime import datetime
+from pathlib import Path
+from typing import TYPE_CHECKING, Any, Dict, List, Optional
+
+if TYPE_CHECKING:
+    from ..core.task import RyzeTask
 
 logger = logging.getLogger(__name__)
 
@@ -173,3 +178,37 @@ class SFTDatasetGenerator:
             json.dump(metadata, f, ensure_ascii=False, indent=2)
 
         return metadata
+
+    def as_task(self, markdown_dir: str = "", output_path: str = "") -> RyzeTask:
+        """Create a RyzeTask wrapper for this generator."""
+        from ..core.task import ResourceRequirement, RyzeTask, TaskResult, TaskStatus, TaskType
+
+        generator = self
+
+        class DatasetGenTask(RyzeTask):
+            def __init__(self, markdown_dir: str, output_path: str):
+                super().__init__(
+                    task_type=TaskType.DATASET_GEN,
+                    inputs={"markdown_dir": markdown_dir, "output_path": output_path},
+                    name="Dataset Generation",
+                )
+
+            def resource_requirements(self) -> ResourceRequirement:
+                return ResourceRequirement(gpu_count=0, memory_gb=1.0, estimated_duration_s=30)
+
+            def validate_inputs(self) -> bool:
+                return True  # Inputs may come from upstream task
+
+            def execute(self, inputs: dict) -> TaskResult:
+                md_dir = inputs.get("markdown_dir") or inputs.get("output_path", "")
+                if md_dir.endswith(".md"):
+                    md_dir = str(Path(md_dir).parent)
+                out = inputs.get("output_path") or os.path.join(md_dir, "dataset.json")
+                metadata = generator.create_dataset(md_dir, out)
+                return TaskResult(
+                    status=TaskStatus.COMPLETED,
+                    output=metadata,
+                    artifacts=[metadata.get("train_path", ""), metadata.get("val_path", "")],
+                )
+
+        return DatasetGenTask(markdown_dir, output_path)
