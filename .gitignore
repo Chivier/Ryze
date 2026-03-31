@@ -205,3 +205,22 @@ Network Trash Folder
 Temporary Items
 .apdisk
 
+# Local data and training artifacts
+*.pdf
+*.arrow
+*.parquet
+*.safetensors
+*.bin
+*.pt
+*.pth
+*.ckpt
+outputs/
+logs/
+eval_outputs/
+sft_outputs/
+rl_outputs/
+checkpoint-*/
+final_model/
+merged_model/
+huggingface_model/
+
